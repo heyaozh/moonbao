@@ -1,0 +1,35 @@
+{
+  "name": "moonbao",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -n server,web -c green,cyan \"npm run dev:server\" \"npm run dev:web\"",
+    "dev:server": "tsx watch server/index.ts",
+    "dev:web": "vite",
+    "typecheck": "tsc --noEmit",
+    "setup:whisper": "bash scripts/setup-whisper.sh",
+    "test:persona": "tsx scripts/persona-test.ts",
+    "memory": "tsx scripts/memory-cli.ts"
+  },
+  "dependencies": {
+    "@andresaya/edge-tts": "^1.8.0",
+    "@anthropic-ai/sdk": "^0.115.0",
+    "@huggingface/transformers": "^4.2.0",
+    "better-sqlite3": "^13.0.3",
+    "dotenv": "^16.4.5",
+    "openai": "^4.104.0",
+    "three": "^0.185.1",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^22.10.0",
+    "@types/three": "^0.185.4",
+    "@types/ws": "^8.5.13",
+    "concurrently": "^9.1.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5"
+  }
+}
