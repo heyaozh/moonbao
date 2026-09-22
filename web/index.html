@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Moonbao</title>
+  <style>
+    :root {
+      --night: #0f1a33; --night2: #1b2a4d; --ink: #e8e6f0; --muted: #9aa3bf; --line: rgba(255,255,255,.14);
+      --moon: #fff4d6; --accent: #ffd98a;
+    }
+    * { margin: 0; box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      background: radial-gradient(120% 90% at 50% 110%, var(--night2) 0%, var(--night) 60%);
+      color: var(--ink); overflow: hidden;
+      font-family: -apple-system, "PingFang SC", "Hiragino Sans GB", sans-serif;
+    }
+    #stage { position: fixed; inset: 0; }
+    /* DOM 占位月亮：P0 用 three.js 替换 */
+    #moon {
+      position: absolute; left: 50%; top: 44%; width: 160px; height: 160px; border-radius: 50%;
+      background: radial-gradient(circle at 42% 38%, #fffaf0 0%, var(--moon) 55%, #e9d9b3 100%);
+      transform: translate(-50%, -50%);
+      transition: box-shadow .4s;
+    }
+    #moon .eye { position: absolute; top: 56%; width: 13px; height: 13px; border-radius: 50%; background: #1a1a1a; }
+    #moon .eye.l { left: 33%; } #moon .eye.r { right: 33%; }
+    #moonBadge { position: absolute; left: 50%; top: calc(44% + 110px); transform: translateX(-50%); font-size: 11px; color: var(--muted); }
+
+    /* ---- 对话壳 ---- */
+    #status {
+      position: fixed; top: 14px; left: 16px; z-index: 6;
+      font-size: 12px; color: var(--muted); padding: 5px 10px; border-radius: 999px;
+      background: rgba(255,255,255,.06); border: 1px solid var(--line);
+      transition: color .3s, border-color .3s;
+    }
+    #status.think { color: var(--accent); }
+    #status.speak { color: #b9d6ff; }
+    #status.listen { color: #a8e0c4; }
+    #status.off { color: #ff9a8a; }
+
+    #bubble {
+      position: fixed; left: 50%; top: 11%; transform: translateX(-50%); z-index: 6;
+      max-width: min(420px, 78vw); padding: 12px 16px; border-radius: 18px 18px 18px 6px;
+      background: rgba(255,255,255,.08); border: 1px solid var(--line); backdrop-filter: blur(10px);
+      box-shadow: 0 6px 24px rgba(0,0,0,.25);
+      font-size: 16px; line-height: 1.55; letter-spacing: .01em; white-space: pre-wrap;
+      animation: pop .28s cubic-bezier(.2,.9,.3,1.2);
+    }
+    #bubble.streaming #bubbleText::after { content: "▍"; color: var(--accent); animation: blink 1s steps(2) infinite; }
+    @keyframes pop { from { opacity: 0; transform: translateX(-50%) translateY(6px) scale(.96); } }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    #userChip {
+      position: fixed; right: 16px; bottom: 72px; z-index: 6; max-width: 46vw;
+      font-size: 13px; color: #10182b; background: var(--accent); padding: 7px 12px; border-radius: 14px 14px 4px 14px;
+      white-space: pre-wrap; opacity: .92;
+    }
+
+    #chatBar {
+      position: fixed; left: 50%; bottom: max(18px, env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 6;
+      display: flex; gap: 8px; width: min(560px, 92vw);
+      background: rgba(255,255,255,.08); backdrop-filter: blur(10px);
+      border: 1px solid var(--line); border-radius: 999px; padding: 6px 6px 6px 16px;
+    }
+    #chatInput { flex: 1; border: 0; background: transparent; outline: 0; font: inherit; font-size: 15px; color: var(--ink); }
+    #chatInput::placeholder { color: var(--muted); }
+    #chatSend { border: 0; background: var(--accent); color: #10182b; border-radius: 999px; padding: 8px 16px; font-size: 13px; cursor: pointer; }
+
+    /* ---- 调试面板 ---- */
+    #panel {
+      position: fixed; top: 14px; right: 14px; width: 244px; z-index: 5;
+      background: rgba(10,16,32,.72); backdrop-filter: blur(10px);
+      border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px 12px;
+      font-size: 12.5px; max-height: calc(100vh - 28px); overflow: auto;
+    }
+    #panel.collapsed > :not(.head) { display: none; }
+    #panel .head { display: flex; align-items: center; justify-content: space-between; }
+    #panel h1 { font-size: 14px; }
+    #panel h1 span { color: var(--accent); }
+    #panelToggle { border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 12px; }
+    #panel .sub { color: var(--muted); font-size: 11px; margin: 2px 0 8px; }
+    #panel .grp { font-size: 11px; color: var(--muted); margin: 10px 0 5px; letter-spacing: .06em; }
+    #actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; }
+    #actions button, .btnrow button {
+      border: 1px solid var(--line); background: rgba(255,255,255,.06); color: var(--ink);
+      border-radius: 8px; padding: 6px 2px; font-size: 11.5px; cursor: pointer;
+    }
+    #actions button:hover, .btnrow button:hover { background: rgba(255,255,255,.14); }
+    #actions button:active { transform: scale(0.96); }
+    .row { display: flex; align-items: center; gap: 8px; margin: 5px 0; }
+    .row label { width: 34px; flex: none; }
+    .row input[type="range"] { flex: 1; accent-color: var(--accent); }
+    .row output { width: 30px; text-align: right; color: var(--muted); font-size: 11px; }
+    .btnrow { display: flex; gap: 6px; margin-top: 6px; }
+    .btnrow button { flex: 1; padding: 6px 0; }
+    #latency { font-size: 11px; color: var(--muted); margin-top: 4px; }
+    .log {
+      font-size: 11px; line-height: 1.45; color: #c3c9dc; max-height: 120px; overflow: auto;
+      background: rgba(0,0,0,.25); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px;
+      white-space: pre-wrap; word-break: break-all;
+    }
+    #transcript .pet { color: var(--accent); }
+    #transcript .me { color: #a8c8ff; }
+    #hint { position: fixed; left: 16px; bottom: 12px; color: var(--muted); font-size: 11px; z-index: 5; }
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <div id="moon"><div class="eye l"></div><div class="eye r"></div></div>
+    <div id="moonBadge"></div>
+  </div>
+
+  <div id="status">……</div>
+  <div id="bubble" hidden><div id="bubbleText"></div></div>
+  <div id="userChip" hidden></div>
+  <form id="chatBar">
+    <input id="chatInput" type="text" placeholder="说点什么……" autocomplete="off" />
+    <button id="chatSend" type="button">说</button>
+  </form>
+
+  <div id="panel">
+    <div class="head">
+      <h1>moon<span>bao</span> · 骨架</h1>
+      <button id="panelToggle" type="button">收起</button>
+    </div>
+    <div class="sub">大脑已接通 · 渲染层为占位</div>
+
+    <div class="grp">对话</div>
+    <div class="btnrow">
+      <button id="proactive" type="button">主动开口(强制)</button>
+      <button id="resetChat" type="button">重置对话</button>
+    </div>
+    <div id="latency">表情 — · 文字 — · 完成 —</div>
+
+    <div class="grp">动作原语（手动）</div>
+    <div id="actions"></div>
+
+    <div class="grp">情绪目标（连续偏置，有惯性）</div>
+    <div class="row"><label>心情</label><input id="valence" type="range" min="-1" max="1" step="0.01" value="0.2" /><output id="valenceOut">0.2</output></div>
+    <div class="row"><label>活力</label><input id="arousal" type="range" min="0" max="1" step="0.01" value="0.5" /><output id="arousalOut">0.5</output></div>
+
+    <div class="grp">协议流（渲染层收到什么）</div>
+    <div id="rlog" class="log"></div>
+
+    <div class="grp">对话记录</div>
+    <div id="transcript" class="log"></div>
+  </div>
+
+  <div id="hint">console: __say("你好") · __act("bounce") · __step(2)</div>
+
+  <script type="module" src="/main.ts"></script>
+</body>
+</html>
