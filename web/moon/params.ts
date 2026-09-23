@@ -42,8 +42,13 @@ export const params = {
     selfGlow: 0.15,
     selfGlowMax: 0.2,
     selfGlowColor: "#fff1d6",
-    /** 真实月面贴图混入程度（0 = 光面，1 = assets/moon/nasa_soft 的贴图）。未决 11，CP0 拖着看；贴图要先按 assets/moon/README.md 重生成，渲染接线待做。 */
-    surfaceRealism: 0,
+    /** 真实月面贴图混入程度（0 = 光面，1 = NASA 柔和贴图）。未决 11，CP0 拖着看。
+     *  贴图是 assets/moon/nasa_soft 缩到 2k 的副本（web/public/moon/，共 350 KB）；默认按 look-dev 选定的样子开 1。 */
+    surfaceRealism: 1,
+    albedoUrl: "/moon/nasa_soft_albedo_2k.jpg",
+    heightUrl: "/moon/nasa_soft_height_1k.png",
+    /** 高程转法线的凹凸强度（0 = 只有颜色没有起伏）；负值翻转坑的凹凸。 */
+    bumpStrength: 0.12,
   },
 
   // ───────────── 月相与光 ─────────────
@@ -222,10 +227,12 @@ export const params = {
   // ───────────── 星空与前景尘埃 ─────────────
   stars: {
     /** 三层远星：数量、深度（屏幕后方距离）、点大小、颜色、亮度。越远越暗越冷（空气透视）。 */
+    // parallax：这一层随观察者横移的程度。1 = 按真实深度算（透过窗看远处会大幅错动），0 = 钉在天上不动（无穷远）。
+    // 2026-09-23 用户：远处的星空要「不太动」——真实的远星在无穷远，头动它不动；只有近星才该有视差。
     layers: [
-      { count: 260, depth: 3.5, size: 0.02, color: "#ffffff", brightness: 0.85 },
-      { count: 420, depth: 7.0, size: 0.014, color: "#dfe8ff", brightness: 0.55 },
-      { count: 700, depth: 14.0, size: 0.01, color: "#b9c8f2", brightness: 0.35 },
+      { count: 260, depth: 3.5, size: 0.02, color: "#ffffff", brightness: 0.85, parallax: 0.6 },
+      { count: 420, depth: 7.0, size: 0.014, color: "#dfe8ff", brightness: 0.55, parallax: 0.25 },
+      { count: 700, depth: 14.0, size: 0.01, color: "#b9c8f2", brightness: 0.35, parallax: 0.05 },
     ],
     /** 星星散布的范围（相对于该深度处可见范围的倍数，>1 保证倾斜时不露边）。 */
     spread: 2.2,

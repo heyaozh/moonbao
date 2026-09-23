@@ -114,10 +114,18 @@ export class Sky {
     this.group.add(this.dust);
   }
 
-  /** @param pxPerUnit 屏幕平面上 1 世界单位 = 多少像素 */
-  update(dt: number, pxPerUnit: number, starVisibility: number) {
+  /** @param pxPerUnit 屏幕平面上 1 世界单位 = 多少像素
+   *  @param eye 观察者相对窗中心的偏移：用来抵消远层的视差（远星 ≈ 无穷远，头动它不动） */
+  update(dt: number, pxPerUnit: number, starVisibility: number, eye: { x: number; y: number }) {
     this.t += dt;
     const uPx = pxPerUnit * params.space.eyeDistance;
+    const ez = params.space.eyeDistance;
+    this.layers.forEach((L, i) => {
+      const cfg = params.stars.layers[i];
+      // 深度 d 处的点在窗上的位移 = eye·d/(ez+d)；把整层反向平移 eye·d/ez·(1-parallax) 就抵消掉 (1-parallax) 的份
+      const k = (cfg.depth / ez) * (1 - cfg.parallax);
+      L.position.set(-eye.x * k, -eye.y * k, 0);
+    });
     for (const L of this.layers) {
       const u = (L.material as THREE.ShaderMaterial).uniforms;
       u.uPx.value = uPx;

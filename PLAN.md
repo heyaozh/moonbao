@@ -35,6 +35,9 @@ Definition of Done：
 - [x] 调试面板：情绪 / 月相 / 钟点 / 眼睛三滑杆 / 空间四滑杆 / 动作按钮 / 截图 / 10 秒序列；`?brain=off` 只看月亮，`?panel=off` 收起面板
 - [x] 无头验收管线：`__step(秒)`、`__snapSave()`、`__recordGif("cp0")` → `python3 scripts/make-gif.py cp0`（15fps、540×960、10.5s，≈5MB）
 - [ ] 嘴 + 腮红常驻（2026-09-23 拍板）：`params.ts` 已有 `mouth` / `blush` 两节（参考图比例、微笑 / o 型 / 平三种嘴形、腮红随情绪加深），渲染层接线待做；眼睛默认已改成参考图比例（0.49 / 0.54 / 0.14）；发光默认改为光晕 + 地照、表面自发光封顶 0.2（`light.selfGlow*`、`halo*`），面板加嘴形 / 腮红 / 自发光滑杆
+- [x] 脸（2026-09-23 look-dev 拍板接线）：嘴三形态（微笑 / o / 平）弹簧插值、由情绪或动作决定；腮红常驻随开心 / 害羞加深；比例按参考图（`params.mouth` / `params.blush`）
+- [x] 月面：NASA 柔和贴图 2k 副本（`web/public/moon/`，350 KB）+ 高程转法线凹凸 + 表面自发光（封顶 0.2）+ 光晕默认档 soft 1.0；`surfaceRealism` 滑杆 0 = 光面
+- [x] 远星几乎不动：每层 `parallax` 系数，最远层 0.05（用户 2026-09-23）
 - [ ] 真机陀螺仪：代码已接（iOS 需手势授权按钮），但需要 HTTPS 才能在手机上测——P4 做
 - [ ] 手机 Safari ≥30fps 未实测（帧率上限已按触屏设备设 30）
 - ⏸ **CHECKPOINT 0**（打开页面，盯 3 分钟，再点几个动作）：
@@ -159,7 +162,7 @@ Capacitor 打包 iOS；推送（follow-up）；订阅 + 道具（RevenueCat）�
 - 移除了语音 VAD 的静态资源拷贝（它不说话；语音输入仍可用 `VOICE_INPUT=on` 走 whisper，只是前端没接麦克风）。
 
 ## Backlog（以后再说）
-portal「穿过去」· 起雾擦字通道 · 前摄视差 · 官方花纹投送 · 花纹分享与审核 · 桌宠（Tauri）· 真人语音付费档 · 多语言人格 · 星星命名/收集 · 与其它角色的"窗台"平台化。
+真实星空贴图（按所在地与时间投影 HYG 星表到最远层，design.md §4）· portal「穿过去」· 起雾擦字通道 · 前摄视差 · 官方花纹投送 · 花纹分享与审核 · 桌宠（Tauri）· 真人语音付费档 · 多语言人格 · 星星命名/收集 · 与其它角色的"窗台"平台化。
 
 ## 会话记录（只增不改）
 - 2026-09-22：立项。品牌名定 Moonbao（查过：英文侧干净，中文「月宝」有一款母婴 app，moonbao.com 被域名贩子挂售 $4,195 别买）。从姊妹项目复制大脑层（协议 / 级联引擎 / 记忆 / 节拍器 / 运行时 / 人格测例结构），角色引用全部清除；动作词汇改为月亮版；人格 v0 草案由 agent 起草待用户推翻；DOM 占位渲染器跑通全链路（`/api/health` OK、vite 200、typecheck 0 错）。写 `docs/design.md`（设定与想法）、本文件、`docs/next-session-prompt.md`。**用户下一步**：refine 本计划；拍板未决问题 1~3；决定何时开 P0。
@@ -167,3 +170,4 @@ portal「穿过去」· 起雾擦字通道 · 前摄视差 · 官方花纹投送
 - 2026-09-23：空间感拍板（见已解决）。用户要求先做 P0 视觉 demo（不接对话），并确认桌面端可用鼠标模拟倾斜。
 - 2026-09-23（P0 demo，PR #3）：裸 three.js 月亮落地：`web/moon/{params,math,camera,eyes,blink,actions,sky,renderer}.ts`。窗相机离轴投影、三层远星 + 前景尘埃、月相 shader + 地照 + 光晕、球面豆眼 + 四形态眨眼、三条弹簧 + noise 漂浮 + squash、12 动作原语 + 特写 / 飞远。无头管线 `__step / __snapSave / __recordGif` + `scripts/make-gif.py`，第一版 cp0.gif 已出。agent 自检发现并修掉：特写距离公式错、光晕放在月心后面导致倾斜时错位、蛾眉月地照过亮盖住月牙。**待用户验收 CHECKPOINT 0**（桌面：鼠标 = 倾斜；真机陀螺仪要 HTTPS，P4）。已知观感问题留给用户判断：竖屏里月亮偏小（深度滑杆可调）、蛾眉月的月牙偏细（terminatorSoftness 可调）。
 - 2026-09-23（look-dev 支线，另一工作树）：Blender 5.1 无头管线 `tools/blender/moon_lookdev.py`，素材 `assets/moon/`。拍板：发光 = 光晕 + 地照、表面自发光封顶 0.2、默认档 soft 1.0；嘴和腮红常驻、可有 o 型嘴等表情。新增未决 11。支线收尾，回主线 P0。
+- 2026-09-23（P0 脸接线）：把 look-dev 拍板接进 three.js：嘴 / 腮红（`web/moon/face.ts`）、NASA 柔和贴图 + 凹凸 + 自发光（shader）、眼睛改参考图比例、光晕 soft 1.0；远星改为几乎不动（每层 parallax）。用户提的「真实星空贴图」进 backlog + design.md §4。面板加表情按钮与月面 / 光滑杆。GIF 重录。

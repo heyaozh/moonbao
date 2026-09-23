@@ -123,7 +123,7 @@
 
   <div id="panel">
     <div class="head">
-      <h1>moon<span>bao</span> · P0</h1>
+      <h1>moon<span>bao</span> · P0 脸</h1>
       <button id="panelToggle" type="button">收起</button>
     </div>
     <div class="sub" id="panelSub">会呼吸的月亮</div>
@@ -140,14 +140,29 @@
     <div class="row"><label>心情</label><input id="valence" type="range" min="-1" max="1" step="0.01" value="0.2" /><output id="valenceOut">0.2</output></div>
     <div class="row"><label>活力</label><input id="arousal" type="range" min="0" max="1" step="0.01" value="0.5" /><output id="arousalOut">0.5</output></div>
 
+    <div class="grp">表情（嘴由情绪决定，这里强制）</div>
+    <div class="btnrow">
+      <button id="mouthAuto" type="button" class="on">自动</button>
+      <button id="mouthSmile" type="button">微笑</button>
+      <button id="mouthO" type="button">o</button>
+      <button id="mouthFlat" type="button">平</button>
+    </div>
+    <div class="row"><label>腮红</label><input id="blush" type="range" min="0" max="0.7" step="0.01" value="0.35" /><output id="blushOut">0.35</output></div>
+
+    <div class="grp">月面与光</div>
+    <div class="row"><label>真实度</label><input id="realism" type="range" min="0" max="1" step="0.01" value="1" /><output id="realismOut">1.00</output></div>
+    <div class="row"><label>凹凸</label><input id="bump" type="range" min="-1" max="1" step="0.02" value="0.12" /><output id="bumpOut">0.12</output></div>
+    <div class="row"><label>自发光</label><input id="selfGlow" type="range" min="0" max="0.2" step="0.01" value="0.15" /><output id="selfGlowOut">0.15</output></div>
+    <div class="row"><label>光晕</label><input id="halo" type="range" min="0" max="1" step="0.01" value="0.65" /><output id="haloOut">0.65</output></div>
+
     <div class="grp">月相与时间</div>
     <div class="row"><label>月相</label><input id="phase" type="range" min="0" max="360" step="1" value="40" /><output id="phaseOut">40</output></div>
     <div class="row"><label>钟点</label><input id="hour" type="range" min="-0.25" max="24" step="0.25" value="-0.25" /><output id="hourOut">实时</output></div>
 
     <div class="grp">眼睛（找到你的答案，我记下来当默认）</div>
-    <div class="row"><label>高度</label><input id="eyeH" type="range" min="0.25" max="0.7" step="0.01" value="0.44" /><output id="eyeHOut">0.44</output></div>
-    <div class="row"><label>间距</label><input id="eyeS" type="range" min="0.4" max="1.4" step="0.01" value="0.95" /><output id="eyeSOut">0.95</output></div>
-    <div class="row"><label>大小</label><input id="eyeZ" type="range" min="0.08" max="0.32" step="0.005" value="0.19" /><output id="eyeZOut">0.19</output></div>
+    <div class="row"><label>高度</label><input id="eyeH" type="range" min="0.25" max="0.7" step="0.01" value="0.49" /><output id="eyeHOut">0.49</output></div>
+    <div class="row"><label>间距</label><input id="eyeS" type="range" min="0.3" max="1.4" step="0.01" value="0.54" /><output id="eyeSOut">0.54</output></div>
+    <div class="row"><label>大小</label><input id="eyeZ" type="range" min="0.06" max="0.32" step="0.005" value="0.14" /><output id="eyeZOut">0.14</output></div>
 
     <div class="grp">空间（鼠标位置 = 倾斜）</div>
     <div class="row"><label>深度</label><input id="depth" type="range" min="0" max="4" step="0.05" value="1.2" /><output id="depthOut">1.2</output></div>

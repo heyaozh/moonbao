@@ -145,6 +145,19 @@ bindSlider("shift", (v) => (params.space.shiftAt20deg = v), (v) => v.toFixed(2))
 bindSlider("sway", (v) => (params.space.moonSwayGain = v), (v) => v.toFixed(2));
 bindSlider("zeta", (v) => (params.motion.posZeta = params.motion.rotZeta = v), (v) => v.toFixed(2));
 
+bindSlider("blush", (v) => (params.blush.opacityBase = v), (v) => v.toFixed(2));
+bindSlider("realism", (v) => (params.moon.surfaceRealism = v), (v) => v.toFixed(2));
+bindSlider("bump", (v) => (params.moon.bumpStrength = v), (v) => v.toFixed(2));
+bindSlider("selfGlow", (v) => (params.moon.selfGlow = v), (v) => v.toFixed(2));
+bindSlider("halo", (v) => (params.light.haloOpacity = v), (v) => v.toFixed(2));
+const mouthBtns: Array<[string, "smile" | "o" | "flat" | null]> = [["mouthAuto", null], ["mouthSmile", "smile"], ["mouthO", "o"], ["mouthFlat", "flat"]];
+for (const [id, shape] of mouthBtns) {
+  (document.getElementById(id) as HTMLButtonElement).onclick = () => {
+    moon.mouthOverride = shape;
+    for (const [id2] of mouthBtns) document.getElementById(id2)!.classList.toggle("on", id2 === id);
+  };
+}
+
 const autoBtn = document.getElementById("autoShake") as HTMLButtonElement;
 autoBtn.onclick = () => {
   moon.cam.autoShake = !moon.cam.autoShake;
