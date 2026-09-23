@@ -2,31 +2,26 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <title>Moonbao</title>
   <style>
     :root {
-      --night: #0f1a33; --night2: #1b2a4d; --ink: #e8e6f0; --muted: #9aa3bf; --line: rgba(255,255,255,.14);
-      --moon: #fff4d6; --accent: #ffd98a;
+      --ink: #e8e6f0; --muted: #9aa3bf; --line: rgba(255,255,255,.14); --accent: #ffd98a;
     }
     * { margin: 0; box-sizing: border-box; }
     html, body { height: 100%; }
     body {
-      background: radial-gradient(120% 90% at 50% 110%, var(--night2) 0%, var(--night) 60%);
-      color: var(--ink); overflow: hidden;
+      background: #0c1530; color: var(--ink); overflow: hidden; touch-action: none;
       font-family: -apple-system, "PingFang SC", "Hiragino Sans GB", sans-serif;
     }
-    #stage { position: fixed; inset: 0; }
-    /* DOM 占位月亮：P0 用 three.js 替换 */
-    #moon {
-      position: absolute; left: 50%; top: 44%; width: 160px; height: 160px; border-radius: 50%;
-      background: radial-gradient(circle at 42% 38%, #fffaf0 0%, var(--moon) 55%, #e9d9b3 100%);
-      transform: translate(-50%, -50%);
-      transition: box-shadow .4s;
-    }
-    #moon .eye { position: absolute; top: 56%; width: 13px; height: 13px; border-radius: 50%; background: #1a1a1a; }
-    #moon .eye.l { left: 33%; } #moon .eye.r { right: 33%; }
-    #moonBadge { position: absolute; left: 50%; top: calc(44% + 110px); transform: translateX(-50%); font-size: 11px; color: var(--muted); }
+    /* 舞台：背景渐变由渲染层按钟点写；canvas 透明叠在上面 */
+    #stage { position: fixed; inset: 0; background: linear-gradient(180deg, #050916, #0c1530 55%, #182448); }
+    #moonCanvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    /* 边缘：极淡暗角 + 随倾斜滑动的玻璃反光。屏幕本身就是窗，不画框。 */
+    #vignette { position: absolute; inset: 0; pointer-events: none;
+      background: radial-gradient(120% 100% at 50% 50%, rgba(0,0,0,0) 55%, rgba(0,0,0,.9) 100%); opacity: .28; }
+    #glint { position: absolute; inset: -40%; pointer-events: none; opacity: .06; will-change: transform;
+      background: radial-gradient(60% 45% at 30% 20%, rgba(255,255,255,.9) 0%, rgba(255,255,255,0) 70%); }
 
     /* ---- 对话壳 ---- */
     #status {
@@ -67,10 +62,11 @@
     #chatInput { flex: 1; border: 0; background: transparent; outline: 0; font: inherit; font-size: 15px; color: var(--ink); }
     #chatInput::placeholder { color: var(--muted); }
     #chatSend { border: 0; background: var(--accent); color: #10182b; border-radius: 999px; padding: 8px 16px; font-size: 13px; cursor: pointer; }
+    body.nobrain #chatBar, body.nobrain #status { display: none; }
 
     /* ---- 调试面板 ---- */
     #panel {
-      position: fixed; top: 14px; right: 14px; width: 244px; z-index: 5;
+      position: fixed; top: 14px; right: 14px; width: 250px; z-index: 5;
       background: rgba(10,16,32,.72); backdrop-filter: blur(10px);
       border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px 12px;
       font-size: 12.5px; max-height: calc(100vh - 28px); overflow: auto;
@@ -89,13 +85,14 @@
     }
     #actions button:hover, .btnrow button:hover { background: rgba(255,255,255,.14); }
     #actions button:active { transform: scale(0.96); }
-    .row { display: flex; align-items: center; gap: 8px; margin: 5px 0; }
-    .row label { width: 34px; flex: none; }
-    .row input[type="range"] { flex: 1; accent-color: var(--accent); }
-    .row output { width: 30px; text-align: right; color: var(--muted); font-size: 11px; }
+    .btnrow button.on { background: rgba(255,217,138,.25); border-color: var(--accent); }
+    .row { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+    .row label { width: 44px; flex: none; }
+    .row input[type="range"] { flex: 1; accent-color: var(--accent); min-width: 0; }
+    .row output { width: 34px; text-align: right; color: var(--muted); font-size: 11px; }
     .btnrow { display: flex; gap: 6px; margin-top: 6px; }
     .btnrow button { flex: 1; padding: 6px 0; }
-    #latency { font-size: 11px; color: var(--muted); margin-top: 4px; }
+    #latency, #fps { font-size: 11px; color: var(--muted); margin-top: 4px; }
     .log {
       font-size: 11px; line-height: 1.45; color: #c3c9dc; max-height: 120px; overflow: auto;
       background: rgba(0,0,0,.25); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px;
@@ -104,14 +101,18 @@
     #transcript .pet { color: var(--accent); }
     #transcript .me { color: #a8c8ff; }
     #hint { position: fixed; left: 16px; bottom: 12px; color: var(--muted); font-size: 11px; z-index: 5; }
+    #gyro { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 7;
+      padding: 12px 18px; border-radius: 999px; border: 1px solid var(--line); background: rgba(10,16,32,.8); color: var(--ink); font-size: 14px; }
   </style>
 </head>
 <body>
   <div id="stage">
-    <div id="moon"><div class="eye l"></div><div class="eye r"></div></div>
-    <div id="moonBadge"></div>
+    <canvas id="moonCanvas"></canvas>
+    <div id="glint"></div>
+    <div id="vignette"></div>
   </div>
 
+  <button id="gyro" type="button" hidden>开启重力感应</button>
   <div id="status">……</div>
   <div id="bubble" hidden><div id="bubbleText"></div></div>
   <div id="userChip" hidden></div>
@@ -122,10 +123,42 @@
 
   <div id="panel">
     <div class="head">
-      <h1>moon<span>bao</span> · 骨架</h1>
+      <h1>moon<span>bao</span> · P0</h1>
       <button id="panelToggle" type="button">收起</button>
     </div>
-    <div class="sub">大脑已接通 · 渲染层为占位</div>
+    <div class="sub" id="panelSub">会呼吸的月亮</div>
+    <div id="fps">fps —</div>
+
+    <div class="grp">动作原语（手动）</div>
+    <div id="actions"></div>
+    <div class="btnrow">
+      <button id="closeup" type="button">特写（一只眼）</button>
+      <button id="farAway" type="button">飞远</button>
+    </div>
+
+    <div class="grp">情绪目标（连续偏置，有惯性）</div>
+    <div class="row"><label>心情</label><input id="valence" type="range" min="-1" max="1" step="0.01" value="0.2" /><output id="valenceOut">0.2</output></div>
+    <div class="row"><label>活力</label><input id="arousal" type="range" min="0" max="1" step="0.01" value="0.5" /><output id="arousalOut">0.5</output></div>
+
+    <div class="grp">月相与时间</div>
+    <div class="row"><label>月相</label><input id="phase" type="range" min="0" max="360" step="1" value="40" /><output id="phaseOut">40</output></div>
+    <div class="row"><label>钟点</label><input id="hour" type="range" min="-0.25" max="24" step="0.25" value="-0.25" /><output id="hourOut">实时</output></div>
+
+    <div class="grp">眼睛（找到你的答案，我记下来当默认）</div>
+    <div class="row"><label>高度</label><input id="eyeH" type="range" min="0.25" max="0.7" step="0.01" value="0.44" /><output id="eyeHOut">0.44</output></div>
+    <div class="row"><label>间距</label><input id="eyeS" type="range" min="0.4" max="1.4" step="0.01" value="0.95" /><output id="eyeSOut">0.95</output></div>
+    <div class="row"><label>大小</label><input id="eyeZ" type="range" min="0.08" max="0.32" step="0.005" value="0.19" /><output id="eyeZOut">0.19</output></div>
+
+    <div class="grp">空间（鼠标位置 = 倾斜）</div>
+    <div class="row"><label>深度</label><input id="depth" type="range" min="0" max="4" step="0.05" value="1.2" /><output id="depthOut">1.2</output></div>
+    <div class="row"><label>幅度</label><input id="shift" type="range" min="0" max="1.2" step="0.02" value="0.5" /><output id="shiftOut">0.5</output></div>
+    <div class="row"><label>重量</label><input id="sway" type="range" min="0" max="0.6" step="0.01" value="0.15" /><output id="swayOut">0.15</output></div>
+    <div class="row"><label>阻尼ζ</label><input id="zeta" type="range" min="0.2" max="1.2" step="0.02" value="0.5" /><output id="zetaOut">0.5</output></div>
+    <div class="btnrow">
+      <button id="autoShake" type="button">自动摇</button>
+      <button id="snap" type="button">截图</button>
+      <button id="demoSeq" type="button">10 秒序列</button>
+    </div>
 
     <div class="grp">对话</div>
     <div class="btnrow">
@@ -134,13 +167,6 @@
     </div>
     <div id="latency">表情 — · 文字 — · 完成 —</div>
 
-    <div class="grp">动作原语（手动）</div>
-    <div id="actions"></div>
-
-    <div class="grp">情绪目标（连续偏置，有惯性）</div>
-    <div class="row"><label>心情</label><input id="valence" type="range" min="-1" max="1" step="0.01" value="0.2" /><output id="valenceOut">0.2</output></div>
-    <div class="row"><label>活力</label><input id="arousal" type="range" min="0" max="1" step="0.01" value="0.5" /><output id="arousalOut">0.5</output></div>
-
     <div class="grp">协议流（渲染层收到什么）</div>
     <div id="rlog" class="log"></div>
 
@@ -148,7 +174,7 @@
     <div id="transcript" class="log"></div>
   </div>
 
-  <div id="hint">console: __say("你好") · __act("bounce") · __step(2)</div>
+  <div id="hint">console: __act("bounce") · __step(2) · __snapSave() · ?brain=off 不连大脑</div>
 
   <script type="module" src="/main.ts"></script>
 </body>

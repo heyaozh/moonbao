@@ -18,9 +18,13 @@ function snapEndpoint(): Plugin {
         req.on("data", (c) => (body += c));
         req.on("end", () => {
           const b64 = body.replace(/^data:image\/\w+;base64,/, "");
-          const dir = path.join(process.cwd(), "snaps");
+          // ?dir=seq-name&name=frame-0001 → snaps/seq-name/frame-0001.jpg（录 GIF 逐帧用）
+          const q = new URL(req.url ?? "/", "http://x").searchParams;
+          const sub = (q.get("dir") ?? "").replace(/[^\w.-]/g, "");
+          const name = (q.get("name") ?? `snap-${Date.now()}`).replace(/[^\w.-]/g, "");
+          const dir = path.join(process.cwd(), "snaps", sub);
           mkdirSync(dir, { recursive: true });
-          const file = path.join(dir, `snap-${Date.now()}.jpg`);
+          const file = path.join(dir, `${name}.jpg`);
           writeFileSync(file, Buffer.from(b64, "base64"));
           res.end(file);
         });
