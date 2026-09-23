@@ -10,3 +10,7 @@ snaps/
 data/
 models/
 persona/tests/last-report.json
+# 月面素材：大贴图与 NASA 原始数据可用 tools/blender/moon_lookdev.py 重生成（见 assets/moon/README.md）
+assets/moon/*/height_16bit.png
+assets/moon/*/albedo.png
+assets/moon/nasa/raw/*.tif

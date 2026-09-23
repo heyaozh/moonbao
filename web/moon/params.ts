@@ -36,8 +36,14 @@ export const params = {
     /** 表面细微斑驳的强度（0 = 完全光滑的球）。陨石坑在 P5 才有。 */
     mottle: 0.1,
     /** 边缘泛光（fresnel）强度：让它在夜空里「发光」而不是被照亮。 */
-    rim: 0.35,
+    rim: 0.4,
     rimColor: "#ffe6a8",
+    /** 表面自发光（暖白）。2026-09-23 拍板：发光靠光晕 + 地照，表面自发光**封顶 0.2**，再高会吃掉月相（look-dev 实测）。 */
+    selfGlow: 0.15,
+    selfGlowMax: 0.2,
+    selfGlowColor: "#fff1d6",
+    /** 真实月面贴图混入程度（0 = 光面，1 = assets/moon/nasa_soft 的贴图）。未决 11，CP0 拖着看；贴图要先按 assets/moon/README.md 重生成，渲染接线待做。 */
+    surfaceRealism: 0,
   },
 
   // ───────────── 月相与光 ─────────────
@@ -49,10 +55,11 @@ export const params = {
     /** 地照强度：满月时的下限 / 新月时的上限（暗部永远不会完全看不见）。 */
     earthshineMin: 0.1,
     earthshineMax: 0.2,
-    /** 光晕 sprite 的大小（半径的倍数）和基础不透明度；glow 状态（dim / brighten）会乘上去。 */
-    haloScale: 3.2,
-    haloOpacity: 0.55,
-    haloColor: "#ffe9b8",
+    /** 光晕 sprite 的大小（半径的倍数）和基础不透明度；glow 状态（dim / brighten）会乘上去。
+     *  默认档 = look-dev soft 1.0（assets/moon/nasa_face_softglow/contact_sheet.jpg 中列）：大而柔、暖白。 */
+    haloScale: 3.6,
+    haloOpacity: 0.65,
+    haloColor: "#fff1d6",
     /** 光的状态 glow 的默认值、下限、上限（dim → glowMin，brighten → glowMax）。 */
     glowDefault: 1.0,
     glowMin: 0.35,
@@ -63,19 +70,21 @@ export const params = {
 
   // ───────────── 眼睛 ─────────────
   eyes: {
-    /** 眼睛在月面上的高度：0 = 最底，0.5 = 正中，1 = 最顶。婴儿图式要偏低一点。 */
-    height: 0.44,
-    /** 两眼间距（半径的倍数）。0.5 个月亮宽 = 1.0 个半径。 */
-    spacing: 0.95,
-    /** 单只眼的大小（半径的倍数）。 */
-    size: 0.19,
-    /** 眼睛的宽高比（>1 横着扁一点，<1 竖着长一点）。 */
-    aspect: 0.92,
+    // 2026-09-23 按用户参考图量的比例（docs/design.md §2、assets/moon/nasa_face_softglow/）：
+    // 小圆点眼、靠得近、在球心高度略下。CP0 拖滑杆再定。
+    /** 眼睛在月面上的高度：0 = 最底，0.5 = 正中，1 = 最顶。参考图：球心略下（0.49）。 */
+    height: 0.49,
+    /** 两眼间距（半径的倍数）。参考图 0.54；设定原写 0.5 个月亮宽 = 1.0 半径，look-dev 时已贴边，弃。 */
+    spacing: 0.54,
+    /** 单只眼的大小（半径的倍数，取眼高）。参考图 0.14。 */
+    size: 0.14,
+    /** 眼睛的宽高比（>1 横着扁一点，<1 竖着长一点）。参考图 0.12/0.14 ≈ 0.86。 */
+    aspect: 0.86,
     color: "#1b1a22",
-    /** 高光点：相对眼睛的位置（-1..1）和大小（眼睛的倍数）。没有它眼睛是死的。 */
+    /** 高光点：相对眼睛的位置（-1..1）和大小（眼睛的倍数）。参考图是哑光黑点没有高光，先留一个小的，CP0 再定要不要。 */
     highlightX: -0.35,
     highlightY: -0.35,
-    highlightSize: 0.22,
+    highlightSize: 0.12,
     /** 眼睛在暗部时的微弱自发光（让它永远看得见）。 */
     emissiveInShade: 0.3,
     /** 视线偏移的最大幅度（眼睛在月面上滑动的距离，半径的倍数）。 */
@@ -83,6 +92,41 @@ export const params = {
     /** 视线偏移的弹簧（看向别处再看回来）。 */
     gazeOmega: 6.0,
     gazeZeta: 0.7,
+  },
+
+  // ───────────── 嘴（常驻；2026-09-23 拍板：它不说话，但可以有表情） ─────────────
+  // 渲染层接线待做（P0）。所有长度都是半径的倍数，位置相对两眼中点。
+  mouth: {
+    enabled: true,
+    /** 嘴中心在两眼中点下方多远。参考图 0.20。 */
+    below: 0.2,
+    /** 微笑：宽、两端上翘量（参考图 ≈ 宽的 1/5）、线粗。 */
+    smileWidth: 0.2,
+    smileCurve: 0.045,
+    thickness: 0.02,
+    /** o 型嘴（惊讶）：半径；平嘴（呆）：宽。嘴形由情绪选：valence 高 → smile，arousal 高且 valence 中 → o，两者都低 → flat。 */
+    oRadius: 0.05,
+    flatWidth: 0.14,
+    /** 嘴形切换的弹簧（形状插值）。 */
+    morphOmega: 8.0,
+    morphZeta: 0.7,
+    color: "#1b1a22",
+  },
+
+  // ───────────── 腮红（常驻，随害羞 / 开心加深） ─────────────
+  blush: {
+    enabled: true,
+    /** 腮红中心：离中轴（半径倍数）、在两眼中点下方多远。参考图 0.46 / 0.14。 */
+    offsetX: 0.46,
+    below: 0.14,
+    /** 半径与颜色（look-dev 用的 (1.0, 0.45, 0.55)）。 */
+    radius: 0.085,
+    color: "#ff7389",
+    /** 中心不透明度（常驻底值）与羽化（0..1，越大边缘越软）；害羞 / 开心时不透明度往 max 走。 */
+    opacityBase: 0.35,
+    opacityMax: 0.7,
+    feather: 0.75,
+    opacityTau: 0.8,
   },
 
   // ───────────── 眨眼 ─────────────

@@ -34,6 +34,7 @@ Definition of Done：
 - [x] lean_in 高档 = 特写（穿过玻璃、转头、一只眼盯着你）；drift_away 高档 = 飞远变小。面板有「特写」「飞远」按钮
 - [x] 调试面板：情绪 / 月相 / 钟点 / 眼睛三滑杆 / 空间四滑杆 / 动作按钮 / 截图 / 10 秒序列；`?brain=off` 只看月亮，`?panel=off` 收起面板
 - [x] 无头验收管线：`__step(秒)`、`__snapSave()`、`__recordGif("cp0")` → `python3 scripts/make-gif.py cp0`（15fps、540×960、10.5s，≈5MB）
+- [ ] 嘴 + 腮红常驻（2026-09-23 拍板）：`params.ts` 已有 `mouth` / `blush` 两节（参考图比例、微笑 / o 型 / 平三种嘴形、腮红随情绪加深），渲染层接线待做；眼睛默认已改成参考图比例（0.49 / 0.54 / 0.14）；发光默认改为光晕 + 地照、表面自发光封顶 0.2（`light.selfGlow*`、`halo*`），面板加嘴形 / 腮红 / 自发光滑杆
 - [ ] 真机陀螺仪：代码已接（iOS 需手势授权按钮），但需要 HTTPS 才能在手机上测——P4 做
 - [ ] 手机 Safari ≥30fps 未实测（帧率上限已按触屏设备设 30）
 - ⏸ **CHECKPOINT 0**（打开页面，盯 3 分钟，再点几个动作）：
@@ -135,6 +136,8 @@ Capacitor 打包 iOS；推送（follow-up）；订阅 + 道具（RevenueCat）�
 8. **陨石坑参数**：流星频率、坑的寿命、月尘填平速度——先给默认，你在 P5 调。
 9. **共享代码策略**：已从姊妹项目**复制而不共享**；记忆层的改进手动同步。要不要以后抽 companion-core，等两个仓库都稳定再说。
 10. **性能预算**：移动端渲染 30fps 上限、后台暂停、粒子数上限——P0 定基线。
+11. **真实月面 vs 光面**（2026-09-23 look-dev 支线）：`tools/blender/moon_lookdev.py` 出了程序化 / NASA LRO 两种月面 × 柔和 × 脸 × 三种发光，素材归档 `assets/moon/`（大贴图 gitignore，一分钟可重生成；高程 / 反照率 PNG 可直接喂 three.js displacement / color）。看过对照后的建议：用 NASA 柔和 0.5 的贴图 + 光晕，脸区不用压平（豆眼是画面里唯一纯黑，不打架）。要不要在 P0 就上真实贴图、还是先光面，CHECKPOINT 0 时拖 `surfaceRealism` 滑杆定。
+12. ✅ **嘴和腮红常驻**（2026-09-23 用户拍板：「它不需要说话，但可以有 o 型嘴等表情」）。→ P0 的 `params.ts` 加嘴 + 腮红参数与嘴形词汇（微笑 / o 型 / 平），比例见 docs/design.md §2。
 
 已解决：
 - 2026-09-22 品牌名 **Moonbao**，仓库 `heyaozh/moonbao`。
@@ -163,3 +166,4 @@ portal「穿过去」· 起雾擦字通道 · 前摄视差 · 官方花纹投送
 - 2026-09-22（第二场）：过 PLAN。拍板：渲染栈裸 three.js；gate 2027-01-31、beta 渠道不限；moonbao 顶 Monstella 占商业赌注槽位。角色名候选记入未决 1，用户自己想。接着逐题讨论功能 / 视觉 / 互动（结果写入本文件或 docs/design.md）。
 - 2026-09-23：空间感拍板（见已解决）。用户要求先做 P0 视觉 demo（不接对话），并确认桌面端可用鼠标模拟倾斜。
 - 2026-09-23（P0 demo，PR #3）：裸 three.js 月亮落地：`web/moon/{params,math,camera,eyes,blink,actions,sky,renderer}.ts`。窗相机离轴投影、三层远星 + 前景尘埃、月相 shader + 地照 + 光晕、球面豆眼 + 四形态眨眼、三条弹簧 + noise 漂浮 + squash、12 动作原语 + 特写 / 飞远。无头管线 `__step / __snapSave / __recordGif` + `scripts/make-gif.py`，第一版 cp0.gif 已出。agent 自检发现并修掉：特写距离公式错、光晕放在月心后面导致倾斜时错位、蛾眉月地照过亮盖住月牙。**待用户验收 CHECKPOINT 0**（桌面：鼠标 = 倾斜；真机陀螺仪要 HTTPS，P4）。已知观感问题留给用户判断：竖屏里月亮偏小（深度滑杆可调）、蛾眉月的月牙偏细（terminatorSoftness 可调）。
+- 2026-09-23（look-dev 支线，另一工作树）：Blender 5.1 无头管线 `tools/blender/moon_lookdev.py`，素材 `assets/moon/`。拍板：发光 = 光晕 + 地照、表面自发光封顶 0.2、默认档 soft 1.0；嘴和腮红常驻、可有 o 型嘴等表情。新增未决 11。支线收尾，回主线 P0。
