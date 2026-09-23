@@ -131,6 +131,8 @@ Capacitor 打包 iOS；推送（follow-up）；订阅 + 道具（RevenueCat）�
 8. **陨石坑参数**：流星频率、坑的寿命、月尘填平速度——先给默认，你在 P5 调。
 9. **共享代码策略**：已从姊妹项目**复制而不共享**；记忆层的改进手动同步。要不要以后抽 companion-core，等两个仓库都稳定再说。
 10. **性能预算**：移动端渲染 30fps 上限、后台暂停、粒子数上限——P0 定基线。
+11. **真实月面 vs 光面**（2026-09-23 look-dev 支线）：`tools/blender/moon_lookdev.py` 出了程序化 / NASA LRO 两种月面 × 柔和 × 脸 × 三种发光，素材归档 `assets/moon/`（大贴图 gitignore，一分钟可重生成；高程 / 反照率 PNG 可直接喂 three.js displacement / color）。看过对照后的建议：用 NASA 柔和 0.5 的贴图 + 光晕，脸区不用压平（豆眼是画面里唯一纯黑，不打架）。要不要在 P0 就上真实贴图、还是先光面，CHECKPOINT 0 时拖 `surfaceRealism` 滑杆定。
+12. ✅ **嘴和腮红常驻**（2026-09-23 用户拍板：「它不需要说话，但可以有 o 型嘴等表情」）。→ P0 的 `params.ts` 加嘴 + 腮红参数与嘴形词汇（微笑 / o 型 / 平），比例见 docs/design.md §2。
 
 已解决：
 - 2026-09-22 品牌名 **Moonbao**，仓库 `heyaozh/moonbao`。
@@ -153,3 +155,4 @@ Capacitor 打包 iOS；推送（follow-up）；订阅 + 道具（RevenueCat）�
 
 ## 会话记录（只增不改）
 - 2026-09-22：立项。品牌名定 Moonbao（查过：英文侧干净，中文「月宝」有一款母婴 app，moonbao.com 被域名贩子挂售 $4,195 别买）。从姊妹项目复制大脑层（协议 / 级联引擎 / 记忆 / 节拍器 / 运行时 / 人格测例结构），角色引用全部清除；动作词汇改为月亮版；人格 v0 草案由 agent 起草待用户推翻；DOM 占位渲染器跑通全链路（`/api/health` OK、vite 200、typecheck 0 错）。写 `docs/design.md`（设定与想法）、本文件、`docs/next-session-prompt.md`。**用户下一步**：refine 本计划；拍板未决问题 1~3；决定何时开 P0。
+- 2026-09-23（look-dev 支线，另一工作树）：Blender 5.1 无头管线 `tools/blender/moon_lookdev.py`，素材 `assets/moon/`。拍板：发光 = 光晕 + 地照、表面自发光封顶 0.2、默认档 soft 1.0；嘴和腮红常驻、可有 o 型嘴等表情。新增未决 11。支线收尾，回主线 P0。

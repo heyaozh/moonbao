@@ -1,0 +1,19 @@
+{
+  "source": "nasa",
+  "soft": 0.5,
+  "width": 4096,
+  "height": 2048,
+  "hmin_km": -8.440970420837402,
+  "hmax_km": 10.023988723754883,
+  "radius_km": 1737.4,
+  "lon_range": [
+    -180,
+    180
+  ],
+  "lat_range": [
+    90,
+    -90
+  ],
+  "seed": 7,
+  "note": "height_16bit.png 的 0..65535 线性对应 hmin_km..hmax_km；three.js displacementScale = (hmax-hmin)/radius * 夸张倍数，displacementBias 按 hmin 换算。"
+}
