@@ -73,21 +73,44 @@ installChat(bus, client, {
     latencyEl.textContent = `表情 ${fmtMs(lat.first_emotion)} · 文字 ${fmtMs(lat.first_text)} · 完成 ${fmtMs(lat.done)}`;
   },
 });
-if (BRAIN) client.connect();
-else document.getElementById("panelSub")!.textContent = "只看月亮（?brain=off）";
+const panelSub = document.getElementById("panelSub")!;
+if (!BRAIN) {
+  panelSub.textContent = "只看月亮（?brain=off）";
+} else {
+  // 先探一下服务端在不在：不在就不开 WebSocket（避免 vite 每次重连都刷 ws proxy error），每 15s 再探
+  const probe = async () => {
+    try {
+      const r = await fetch("/api/health", { cache: "no-store" });
+      if (r.ok) {
+        panelSub.textContent = "大脑已接通";
+        client.connect();
+        return;
+      }
+    } catch {
+      /* 服务端没起 */
+    }
+    panelSub.textContent = "大脑未启动（npm run dev:server）· 只看月亮";
+    document.getElementById("status")!.textContent = "大脑未启动";
+    setTimeout(probe, 15_000);
+  };
+  void probe();
+}
 
 function fmtMs(v?: number) {
   return v == null ? "—" : v < 1000 ? `${Math.round(v)}ms` : `${(v / 1000).toFixed(1)}s`;
 }
 
-// ---------- 更新循环：永不静止（标签页隐藏时暂停） ----------
+// ---------- 更新循环：永不静止 ----------
+// 不按 document.hidden 门控：真隐藏时浏览器自己会停 rAF（零成本）；而嵌入式浏览器面板（如 Claude 桌面 app）
+// 会把可见页面也报成 hidden，门控会让月亮冻住、点动作只抽一下。回到前台时 dt 有上限，不会跳帧。
 let last = performance.now();
 const fpsEl = document.getElementById("fps")!;
 let fpsTick = 0;
+document.addEventListener("visibilitychange", () => (last = performance.now()));
 function tick(now: number) {
-  const dt = Math.min(0.05, (now - last) / 1000);
+  const dt = Math.min(params.perf.maxFrameDt, (now - last) / 1000);
   last = now;
-  if (!(params.perf.pauseWhenHidden && document.hidden)) character.update(dt);
+  character.update(dt);
   if ((fpsTick += dt) > 0.5) {
     fpsTick = 0;
     fpsEl.textContent = `fps ${moon.fps.toFixed(0)} · 倾斜 ${moon.cam.tilt.x.toFixed(0)}°/${moon.cam.tilt.y.toFixed(0)}°`;
@@ -116,11 +139,11 @@ for (const name of ACTIONS) {
   if (name === "idle_drift") continue;
   const b = document.createElement("button");
   b.textContent = ACTION_LABELS[name];
-  b.onclick = () => character.playAction(name, 0.7);
+  b.onclick = () => character.playAction(name, 0.7, "manual");
   actionsEl.appendChild(b);
 }
-(document.getElementById("closeup") as HTMLButtonElement).onclick = () => character.playAction("lean_in", 1);
-(document.getElementById("farAway") as HTMLButtonElement).onclick = () => character.playAction("drift_away", 1);
+(document.getElementById("closeup") as HTMLButtonElement).onclick = () => character.playAction("lean_in", 1, "manual");
+(document.getElementById("farAway") as HTMLButtonElement).onclick = () => character.playAction("drift_away", 1, "manual");
 
 const bindSlider = (id: string, fn: (v: number) => void, fmt: (v: number) => string = (v) => String(v)) => {
   const el = document.getElementById(id) as HTMLInputElement;
@@ -177,7 +200,7 @@ const DEMO_SECONDS = 10.5;
 function runDemo() {
   moon.cam.autoShake = true;
   autoBtn.classList.add("on");
-  for (const [at, name, k] of DEMO) setTimeout(() => character.playAction(name, k), at * 1000);
+  for (const [at, name, k] of DEMO) setTimeout(() => character.playAction(name, k, "manual"), at * 1000);
   setTimeout(() => {
     moon.cam.autoShake = false;
     autoBtn.classList.remove("on");
@@ -200,7 +223,7 @@ async function recordGif(seq = "cp0", opts: { fps?: number; seconds?: number; w?
   const n = Math.round(seconds * fps);
   for (let i = 0; i < n; i++) {
     while (next < DEMO.length && DEMO[next][0] <= t) {
-      character.playAction(DEMO[next][1], DEMO[next][2]);
+      character.playAction(DEMO[next][1], DEMO[next][2], "manual");
       next++;
     }
     // 每帧内部按 60Hz 细分，弹簧更稳
@@ -256,7 +279,7 @@ window.__say = (text) => {
   bus.emit("user:send", { text });
   client.send({ type: "text", text });
 };
-window.__act = (name, intensity = 0.7) => character.playAction(name, intensity);
+window.__act = (name, intensity = 0.7) => character.playAction(name, intensity, "manual");
 // 隐藏标签页里 rAF 不跑：手动把时钟往前拨（无头验收用）
 window.__step = (seconds = 1) => {
   const n = Math.ceil(seconds * 60);

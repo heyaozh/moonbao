@@ -268,8 +268,8 @@ export const params = {
     fpsMobile: 30,
     /** devicePixelRatio 上限（Retina 手机 3 倍太贵）。 */
     maxPixelRatio: 2,
-    /** 标签页不可见时暂停渲染。 */
-    pauseWhenHidden: true,
+    /** 单帧模拟时间上限（秒）：rAF 掉帧到 10fps 时仍按真实时间推进（弹簧内部会细分），再慢就减速而不是跳帧。 */
+    maxFrameDt: 0.1,
   },
 };
 

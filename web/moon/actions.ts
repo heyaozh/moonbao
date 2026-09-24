@@ -3,6 +3,7 @@
 // 主动运动先反向蓄力（anticipation）：lean_in 先往后缩一点再冲过来。
 
 import type { Action } from "../../shared/protocol";
+import type { ActionSource } from "../runtime/renderer";
 import type { EyeShape } from "./eyes";
 import type { MouthShape } from "./face";
 import { deg, easeInOut, easeOut } from "./math";
@@ -238,22 +239,29 @@ const fns: Record<Action, ActionFn> = {
   },
 };
 
+const PRIORITY: Record<ActionSource, number> = { reflex: 0, brain: 1, manual: 2 };
+
 export class ActionRunner {
-  private cur: { name: Action; k: number; t: number; side: 1 | -1 } | null = null;
+  private cur: { name: Action; k: number; t: number; side: 1 | -1; prio: number } | null = null;
   readonly pose: Pose = { ...IDLE_POSE };
 
   get current(): Action | null {
     return this.cur?.name ?? null;
   }
 
-  play(name: Action, intensity: number) {
+  /** 低优先级的来源不打断正在进行的高优先级动作（返回 false = 被忽略）。同级或更高会替换。 */
+  play(name: Action, intensity: number, source: ActionSource = "brain"): boolean {
+    const prio = PRIORITY[source];
     if (name === "idle_drift") {
+      if (this.cur && this.cur.prio > prio) return false;
       this.cur = null;
-      return;
+      return true;
     }
+    if (this.cur && this.cur.prio > prio) return false;
     const cfgSide = params.actions.hide_edge.side;
     const side: 1 | -1 = cfgSide === "left" ? -1 : cfgSide === "right" ? 1 : Math.random() < 0.5 ? -1 : 1;
-    this.cur = { name, k: Math.max(0, Math.min(1, intensity)), t: 0, side };
+    this.cur = { name, k: Math.max(0, Math.min(1, intensity)), t: 0, side, prio };
+    return true;
   }
 
   update(dt: number, ctx: Omit<ActionCtx, "side">): Pose {

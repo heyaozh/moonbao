@@ -29,6 +29,15 @@ export function installRuntime(bus: Bus, renderer: CharacterRenderer, opts: Runt
   let lastLeanAt = -Infinity;
   let wasDisconnected = false;
   let greeted = false;
+  // 反射限频：服务端反复崩 / 重连时，不能每秒都「变暗 / 亮起 / 抖」，那会把正在做的动作打断成一下下抽搐
+  const REFLEX_COOLDOWN = 10_000;
+  const lastReflexAt: Record<string, number> = {};
+  const reflex = (key: string, name: Parameters<CharacterRenderer["playAction"]>[0], k: number) => {
+    const now = performance.now();
+    if (now - (lastReflexAt[key] ?? -Infinity) < REFLEX_COOLDOWN) return;
+    lastReflexAt[key] = now;
+    renderer.playAction(name, k, "reflex");
+  };
 
   const clearTimers = () => {
     if (thinkTimer) clearTimeout(thinkTimer);
@@ -46,7 +55,7 @@ export function installRuntime(bus: Bus, renderer: CharacterRenderer, opts: Runt
     const now = performance.now();
     if (active && now - lastLeanAt > leanCooldown) {
       lastLeanAt = now;
-      renderer.playAction("lean_in", 0.5);
+      renderer.playAction("lean_in", 0.5, "reflex");
     }
   });
 
@@ -60,10 +69,10 @@ export function installRuntime(bus: Bus, renderer: CharacterRenderer, opts: Runt
     renderer.setSpeaking(value === "speaking");
     if (value === "thinking") {
       thinkTimer = setTimeout(() => {
-        if (state === "thinking") renderer.playAction("think_tilt", 0.5);
+        if (state === "thinking") renderer.playAction("think_tilt", 0.5, "reflex");
       }, thinkTiltAfter);
       stallTimer = setTimeout(() => {
-        if (state === "thinking") renderer.playAction("dim", 0.4);
+        if (state === "thinking") renderer.playAction("dim", 0.4, "reflex");
       }, stallAfter);
     }
   });
@@ -71,10 +80,10 @@ export function installRuntime(bus: Bus, renderer: CharacterRenderer, opts: Runt
   bus.on("net:status", ({ connected }) => {
     if (!connected) {
       wasDisconnected = true;
-      renderer.playAction("dim", 0.6);
+      reflex("net", "dim", 0.6);
     } else if (wasDisconnected) {
       wasDisconnected = false;
-      renderer.playAction("brighten", 0.6);
+      reflex("net", "brighten", 0.6);
     }
   });
 
@@ -82,10 +91,10 @@ export function installRuntime(bus: Bus, renderer: CharacterRenderer, opts: Runt
     // 见面点个头（只在本页第一次连上时）
     if (greeted) return;
     greeted = true;
-    setTimeout(() => renderer.playAction("nod", 0.5), 400);
+    setTimeout(() => renderer.playAction("nod", 0.5, "reflex"), 400);
   });
 
   bus.on("engine:error", () => {
-    renderer.playAction("shiver", 0.4);
+    reflex("error", "shiver", 0.4);
   });
 }

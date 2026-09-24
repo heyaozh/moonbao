@@ -4,7 +4,7 @@
 
 import * as THREE from "three";
 import type { Action } from "../../shared/protocol";
-import type { CharacterRenderer } from "../runtime/renderer";
+import type { ActionSource, CharacterRenderer } from "../runtime/renderer";
 import { ActionRunner } from "./actions";
 import { Blinker } from "./blink";
 import { WindowCamera } from "./camera";
@@ -251,8 +251,8 @@ export class MoonRenderer implements CharacterRenderer {
     this.target.valence = clamp(valence, -1, 1);
     this.target.arousal = clamp(arousal, 0, 1);
   }
-  playAction(name: Action, intensity: number) {
-    this.actions.play(name, intensity);
+  playAction(name: Action, intensity: number, source: ActionSource = "brain") {
+    if (!this.actions.play(name, intensity, source)) return; // 被更高优先级的动作挡住
     if (name === "bounce" || name === "spin") this.blinker.blinkNow(false);
     if (name === "shiver" || name === "hide_edge") this.blinker.blinkNow(true);
   }
@@ -313,6 +313,14 @@ export class MoonRenderer implements CharacterRenderer {
     this.pos.setTarget(driftX + pose.dx + this.swayX.x, driftY + pose.dy + this.swayY.x, -P.space.moonDepth + pose.dz);
     this.rot.setTarget(pose.yaw, pose.pitch, pose.roll + driftRoll);
     this.bodyYaw.target = pose.bodyYaw;
+    // roll / spin 转完整圈后，把弹簧的当前角减掉整圈数：否则目标回到 0 时它会倒着转回去一整圈
+    if (!this.actions.current) {
+      const TAU = Math.PI * 2;
+      for (const sp of [this.rot.s[0], this.bodyYaw]) {
+        const k = Math.round(sp.x / TAU);
+        if (k !== 0) sp.x -= k * TAU;
+      }
+    }
     this.pos.step(dt);
     this.rot.step(dt);
     this.bodyYaw.step(dt);

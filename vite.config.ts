@@ -8,6 +8,20 @@ function snapEndpoint(): Plugin {
   return {
     name: "snap-endpoint",
     configureServer(server) {
+      // /api/health 不走 http-proxy：服务端没起时 http-proxy 会每次打一整段 ECONNREFUSED 堆栈。
+      // 这里自己探一下，探不到就安静地回 503，前端据此决定要不要开 WebSocket。
+      server.middlewares.use("/api/health", async (_req, res) => {
+        try {
+          const r = await fetch("http://localhost:8787/api/health", { signal: AbortSignal.timeout(1500) });
+          res.statusCode = r.status;
+          res.setHeader("content-type", "application/json");
+          res.end(await r.text());
+        } catch {
+          res.statusCode = 503;
+          res.setHeader("content-type", "application/json");
+          res.end(JSON.stringify({ ok: false, reason: "brain server not running (npm run dev:server)" }));
+        }
+      });
       server.middlewares.use("/__snap", (req, res) => {
         if (req.method !== "POST") {
           res.statusCode = 405;
@@ -41,6 +55,7 @@ export default defineConfig({
   server: {
     port: 5176,
     proxy: {
+      // 服务端没起时 http-proxy 会每次重连都打一整段 ECONNREFUSED 堆栈；这里收成一行、60s 内只报一次
       "/ws": { target: "ws://localhost:8787", ws: true },
       "/api": { target: "http://localhost:8787" },
     },
