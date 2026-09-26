@@ -243,6 +243,7 @@ export class MoonRenderer implements CharacterRenderer {
       time: this.t,
       night: ctx.world.night,
       radius: R,
+      illuminated: ctx.world.phase.illuminated,
     });
   }
 

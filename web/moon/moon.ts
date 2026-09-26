@@ -382,7 +382,7 @@ export class MoonBody {
     this.squashNode.matrixWorldNeedsUpdate = true;
   }
 
-  update(opts: { sunDir: THREE.Vector3; earthshine: number; glow: number; face: FaceParams; blush: number; time: number; night: number; radius: number }) {
+  update(opts: { sunDir: THREE.Vector3; earthshine: number; glow: number; face: FaceParams; blush: number; time: number; night: number; radius: number; illuminated: number }) {
     const P = params;
     const u = this.mesh.material.uniforms;
     const F = P.face;
@@ -458,7 +458,8 @@ export class MoonBody {
     const hs = P.light.haloScale * opts.radius * 2 * (0.9 + 0.1 * opts.glow);
     this.halo.scale.set(hs, hs, 1);
     const hm = this.halo.material as THREE.SpriteMaterial;
-    hm.opacity = P.light.haloOpacity * opts.glow * (0.3 + 0.7 * opts.night);
+    // 光晕跟着亮面比例走：蛾眉月时只剩一点点
+    hm.opacity = P.light.haloOpacity * opts.glow * (0.3 + 0.7 * opts.night) * (0.25 + 0.75 * opts.illuminated);
     hm.color.set(P.light.haloColor);
   }
 }

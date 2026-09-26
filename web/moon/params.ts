@@ -180,7 +180,7 @@ const defaults = {
     chatHome: { x: -0.36, y: 0.98, depth: 2.2 },
     /** 月面亮部颜色 / 暗部（地照）颜色。 */
     litColor: "#ffd2a0",
-    shadeColor: "#7c8fbf",
+    shadeColor: "#8d8ca3",
     /** 明暗交界的柔和度（0 = 刀切，0.4 = 很柔）。用户：月相的分界线要柔和。 */
     terminatorSoftness: 0.26,
     /** 包裹光：让亮面更平、更「软」（0 = 物理，0.5 = 很软）。 */
@@ -199,7 +199,7 @@ const defaults = {
     volumeDir: { x: -0.55, y: 0.6, z: 0.6 },
     rimColor: "#ffe2a8",
     /** 表面自发光（暖白）。2026-09-23 拍板：发光靠光晕 + 地照，表面自发光封顶 0.2。 */
-    selfGlow: 0.1,
+    selfGlow: 0.035,
     selfGlowMax: 0.2,
     selfGlowColor: "#fff1d6",
     /** 真实月面贴图混入程度（0 = 光面，1 = NASA 柔和贴图，用户偏好样板）。 */
@@ -224,8 +224,8 @@ const defaults = {
     /** 手动月相时亮边的方向（度，从头顶逆时针量）。真实月相时自动算。 */
     limbDeg: -60,
     /** 地照强度：满月时的下限 / 新月时的上限（暗部永远不会完全看不见）。 */
-    earthshineMin: 0.12,
-    earthshineMax: 0.3,
+    earthshineMin: 0.05,
+    earthshineMax: 0.11,
     /** 光晕：大小（半径的倍数）、不透明度、颜色；glow 状态（dim / brighten）会乘上去。 */
     haloScale: 2.3,
     haloOpacity: 0.5,
