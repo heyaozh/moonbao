@@ -152,7 +152,9 @@ export function layoutLines(text: string, s: TextStyle, seed: number): LineLayou
       }
       x += measureCtx.measureText(r.text).width;
     }
-    return { text: t, chars, width: x, indent: rnd() * s.en * 1.4, tilt: (rnd() - 0.5) * 0.035, dy: (rnd() - 0.5) * s.en * 0.18 };
+    // 每行随机缩进一点（不是很整齐地漂浮），但不许把整行推出右边
+    const room = Math.max(0, s.maxWidth * END_TOL - x);
+    return { text: t, chars, width: x, indent: Math.min(rnd() * s.en * 1.4, room), tilt: (rnd() - 0.5) * 0.035, dy: (rnd() - 0.5) * s.en * 0.18 };
   });
 }
 
