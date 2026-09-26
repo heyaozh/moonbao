@@ -36,7 +36,7 @@ Definition of Done：
 - [x] 无头验收管线：`__step(秒)`、`__snapSave()`、`__recordGif("cp0")` → `python3 scripts/make-gif.py cp0`（15fps、540×960、10.5s，≈5MB）
 - [ ] 嘴 + 腮红常驻（2026-09-23 拍板）：`params.ts` 已有 `mouth` / `blush` 两节（参考图比例、微笑 / o 型 / 平三种嘴形、腮红随情绪加深），渲染层接线待做；眼睛默认已改成参考图比例（0.49 / 0.54 / 0.14）；发光默认改为光晕 + 地照、表面自发光封顶 0.2（`light.selfGlow*`、`halo*`），面板加嘴形 / 腮红 / 自发光滑杆
 - [x] 脸（2026-09-23 look-dev 拍板接线）：嘴三形态（微笑 / o / 平）弹簧插值、由情绪或动作决定；腮红常驻随开心 / 害羞加深；比例按参考图（`params.mouth` / `params.blush`）
-- [x] 月面：NASA 柔和贴图 2k 副本（`web/public/moon/`，350 KB）+ 高程转法线凹凸 + 表面自发光（封顶 0.2）+ 光晕默认档 soft 1.0；`surfaceRealism` 滑杆 0 = 光面
+- [x] 月面：NASA 柔和 0.5 贴图 2k 副本（`web/public/moon/`，约 570 KB；2026-09-26 从 nasa_soft 0.7 对齐到用户偏好样板 nasa_face_softglow）+ 高程转法线凹凸 + 表面自发光（封顶 0.2）+ 光晕默认档 soft 1.0；`surfaceRealism` 滑杆 0 = 光面
 - [x] 远星几乎不动：每层 `parallax` 系数，最远层 0.05（用户 2026-09-23）
 - [ ] 真机陀螺仪：代码已接（iOS 需手势授权按钮），但需要 HTTPS 才能在手机上测——P4 做
 - [ ] 手机 Safari ≥30fps 未实测（帧率上限已按触屏设备设 30）
@@ -172,3 +172,4 @@ Capacitor 打包 iOS；推送（follow-up）；订阅 + 道具（RevenueCat）�
 - 2026-09-23（look-dev 支线，另一工作树）：Blender 5.1 无头管线 `tools/blender/moon_lookdev.py`，素材 `assets/moon/`。拍板：发光 = 光晕 + 地照、表面自发光封顶 0.2、默认档 soft 1.0；嘴和腮红常驻、可有 o 型嘴等表情。新增未决 11。支线收尾，回主线 P0。
 - 2026-09-23（P0 脸接线）：把 look-dev 拍板接进 three.js：嘴 / 腮红（`web/moon/face.ts`）、NASA 柔和贴图 + 凹凸 + 自发光（shader）、眼睛改参考图比例、光晕 soft 1.0；远星改为几乎不动（每层 parallax）。用户提的「真实星空贴图」进 backlog + design.md §4。面板加表情按钮与月面 / 光滑杆。GIF 重录。
 - 2026-09-24（修用户反馈）：用户原话「一直有一些 ws proxy socket error，而且好像点击任何动作都只是弹一下没有区别」。查明两个根源：① 只跑了 `dev:web` 没起大脑，客户端不停重连，vite 每次打一整段 ECONNREFUSED；② 更关键：Claude 桌面 app 的内置浏览器面板把可见页面报成 `document.hidden=true`，更新循环按 hidden 门控直接暂停，只在点击瞬间跑一两帧，看起来就是抽一下。修法：循环不再按 hidden 门控（真隐藏时浏览器自己停 rAF）、单帧上限 0.05→0.1s；前端先探 `/api/health`（vite 中间件自己探，不走 http-proxy）再开 WebSocket；动作加来源优先级 manual > brain > reflex，反射不打断进行中的动作且 10s 限频；roll / spin 转完把弹簧角归零（原来会倒转一圈）。
+- 2026-09-26：素材收尾。主检出从 claude/bootstrap 切回 main；全尺寸 3D 素材只保留偏好样板 nasa_face_softglow（在主检出、gitignore）+ NASA 原始 tif；参考插画入库 `assets/moon/reference/face_reference.jpg`；网页贴图对齐到偏好样板（柔和 0.5），新增 `tools/blender/make_web_textures.py`。
