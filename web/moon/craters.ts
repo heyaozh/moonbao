@@ -30,10 +30,13 @@ const frag = /* glsl */ `
       float d = length(q - center) / R;
       if (d > 1.8) continue;
       float bowl = -(1.0 - d * d) * step(d, 1.0);
-      float rim = exp(-pow((d - 1.0) / 0.16, 2.0)) * 0.55;
-      float ejecta = exp(-pow((d - 1.0) / 0.5, 2.0)) * 0.08 * step(1.0, d);
+      float q1 = (d - 1.0) / 0.16;
+      float rim = exp(-q1 * q1) * 0.55;
+      float q2 = (d - 1.0) / 0.5;
+      float ejecta = exp(-q2 * q2) * 0.08 * step(1.0, d);
       h += (bowl * 0.9 + rim + ejecta) * R;
-      alb += (-0.10 * step(d, 0.85) + 0.07 * exp(-pow((d - 1.0) / 0.12, 2.0))) * (0.6 + 0.4 * r.y);
+      float q3 = (d - 1.0) / 0.12;
+      alb += (-0.10 * step(d, 0.85) + 0.07 * exp(-q3 * q3)) * (0.6 + 0.4 * r.y);
     }
     return vec2(h, alb);
   }

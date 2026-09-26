@@ -1,6 +1,6 @@
 // App：把舞台、世界、月亮、运行时（总线 / 节拍器 / 反射）、输入和调试工具接在一起，跑更新循环。
 
-import { SpeechAudio } from "../audio";
+import { SpeechAudio } from "../audio/speech";
 import { MoonRenderer } from "../moon/renderer";
 import { params } from "../moon/params";
 import { Bus } from "../runtime/bus";

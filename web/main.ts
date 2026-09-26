@@ -1,10 +1,20 @@
 // 前端入口：App（舞台 / 世界 / 月亮 / 运行时）+ 输入（倾斜）+ 调试面板 + 无头验收工具。
 // ?scene=<名字> 打开某个画面状态；?brain=off 不连服务端；?panel=off 收起面板。
 
+import "lxgw-wenkai-screen-webfont/lxgwwenkaigbscreen.css";
+import "@fontsource/dancing-script/400.css";
+import "@fontsource/sacramento/400.css";
+import "@fontsource/caveat/400.css";
+import "@fontsource/ms-madi/400.css";
 import { ACTIONS, type Action } from "../shared/protocol";
 import { App } from "./app/app";
 import { Panel } from "./app/panel";
-import { applyScene, SCENES } from "./app/scenes";
+import { applyScene, SCENES, type SceneCtx } from "./app/scenes";
+import { Mic, toBase64 } from "./audio/mic";
+import { ChatView } from "./chat/chatview";
+import { DemoBrain } from "./chat/demo";
+import { FONT_CANDIDATES, fontState, type FontName } from "./chat/glyphs";
+import { GlassUI } from "./ui/ui";
 import { CHARACTER_NAME } from "./config";
 import { Behaviors } from "./moon/behaviors";
 import { EXPR_LABELS, EXPR_NAMES } from "./moon/expressions";
@@ -27,12 +37,73 @@ const interact = new MoonInteraction(app.moon, app.stage.cam, canvas, {
 });
 const life = new Behaviors(app.moon, app.world, app.stage.cam, interact, () => app.stage.pixelRatio);
 app.stage.back.add(life.star.points);
+
+// ---------- 对话画面 + 演示大脑 + 玻璃界面 ----------
+if (q.has("font") && q.get("font")! in FONT_CANDIDATES) fontState.en = q.get("font") as FontName;
+const chat = new ChatView(app);
+const demo = new DemoBrain(app.bus);
+const mic = new Mic();
+const ui = new GlassUI(app.bus, chat, app.stage.cam, {
+  send(text) {
+    life.notifyActivity();
+    if (app.client.connected) app.client.send({ type: "text", text });
+    else demo.reply(text);
+  },
+  voiceStart: () => mic.start(),
+  async voiceStop() {
+    const rec = await mic.stop();
+    if (!rec) return null;
+    if (app.client.connected && voiceOnServer) {
+      // 真识别：交给服务端（本机 whisper）；识别结果经 engine:transcript 回来
+      app.client.send({ type: "utterance", wavBase64: toBase64(rec.wav) });
+      return pendingTranscript();
+    }
+    // 没有识别服务：演示里用一句示例话
+    return ["Will you stay with me?", "Long day.", "I'm a bit nervous today."][Math.floor(Math.random() * 3)];
+  },
+  voiceLevel: () => mic.level(),
+});
+let voiceOnServer = false;
+let transcriptWaiter: ((t: string | null) => void) | null = null;
+function pendingTranscript() {
+  return new Promise<string | null>((resolve) => {
+    transcriptWaiter = resolve;
+    setTimeout(() => {
+      if (transcriptWaiter === resolve) {
+        transcriptWaiter = null;
+        resolve(null);
+      }
+    }, 15000);
+  });
+}
+app.bus.on("engine:hello", ({ voice }) => (voiceOnServer = voice));
+app.bus.on("engine:transcript", ({ role, text }) => {
+  if (role === "user" && transcriptWaiter) {
+    const w = transcriptWaiter;
+    transcriptWaiter = null;
+    w(text);
+  }
+});
+// 大脑 → 画面
+app.bus.on("paced:text", ({ text }) => chat.moonSay(text, false));
+app.bus.on("paced:done", ({ text }) => {
+  if (text) chat.moonSay(text, true);
+});
+app.bus.on("engine:state", ({ value }) => chat.setThinking(value === "thinking"));
+app.bus.on("moon:hint", ({ length, text }) => chat.hint(length, text));
+app.bus.on("user:typing", () => life.notifyActivity());
 app.onTick((dt) => {
   interact.update(dt);
+  demo.update(dt);
+  chat.update(dt);
+  ui.update();
+  // 聊天时不自己玩
+  life.paused = app.moon.chatMode;
   life.update(dt);
 });
+const sceneCtx: SceneCtx = { chat, demo, life };
 
-const sceneName = applyScene(app, q.get("scene") ?? "real");
+const sceneName = applyScene(app, q.get("scene") ?? "real", sceneCtx);
 if (!q.has("scene") || sceneName === "real") life.playOpening();
 if (q.has("hour")) app.world.hourOverride = Number(q.get("hour"));
 if (q.has("phase")) params.light.phaseDeg = Number(q.get("phase"));
@@ -88,7 +159,7 @@ if (q.get("panel") === "off") panel.root.hidden = true;
   panel.buttons(
     s,
     Object.entries(SCENES).map(([k, v]) => [v.label, () => {
-      applyScene(app, k);
+      applyScene(app, k, sceneCtx);
       panel.refresh();
       history.replaceState(null, "", `?scene=${k}`);
     }]),
@@ -114,6 +185,21 @@ if (q.get("panel") === "off") panel.root.hidden = true;
   let ar = 0.5;
   panel.slider(a, "心情", -1, 1, 0.01, () => v, (x) => app.moon.setEmotion((v = x), ar));
   panel.slider(a, "活力", 0, 1, 0.01, () => ar, (x) => app.moon.setEmotion(v, (ar = x)));
+}
+{
+  const s = panel.section("字");
+  panel.buttons(s, (Object.keys(FONT_CANDIDATES) as FontName[]).map((f) => [f, () => (fontState.en = f)]), true);
+  panel.param(s, "英文字号", "writer.enPx", 18, 48, 1);
+  panel.param(s, "中文字号", "writer.zhPx", 16, 40, 1);
+  panel.param(s, "光点/字", "writer.perChar", 10, 120, 1);
+  panel.param(s, "光点粗细", "writer.particleSize", 0.4, 3);
+  panel.param(s, "日常飞行", "writer.dailyDur", 0.2, 2);
+  panel.param(s, "隆重飞行", "writer.grandDur", 0.5, 3);
+  panel.param(s, "字后暗底", "writer.backing", 0, 0.8);
+  panel.param(s, "透镜", "bubble.lens", 0, 3);
+  panel.param(s, "透镜范围", "bubble.margin", 0.05, 0.5);
+  panel.param(s, "往后退深", "chat.stepDepth", 0.3, 2.5);
+  panel.param(s, "往上挪", "chat.stepUp", 0, 2);
 }
 {
   const s = panel.section("月亮");
@@ -250,13 +336,17 @@ declare global {
     __tilt: (xDeg: number, yDeg: number) => void;
     __interact: MoonInteraction;
     __life: Behaviors;
+    __chat: ChatView;
+    __demo: DemoBrain;
   }
 }
+window.__chat = chat;
+window.__demo = demo;
 window.__interact = interact;
 window.__life = life;
 window.__app = app;
 window.__params = params;
-window.__scene = (name) => void applyScene(app, name);
+window.__scene = (name) => void applyScene(app, name, sceneCtx);
 window.__act = (name, intensity = 0.7) => app.moon.playAction(name, intensity, "manual");
 window.__step = (seconds = 1) => {
   const n = Math.ceil(seconds * 60);

@@ -260,7 +260,7 @@ const meteorFrag = /* glsl */ `
   varying float vSide;
   void main() {
     float across = 1.0 - vSide * vSide;
-    float along = pow(1.0 - vAlong, 2.2);
+    float along = pow(clamp(1.0 - vAlong, 0.0, 1.0), 2.2);
     float head = exp(-vAlong * 38.0) * 2.5;
     gl_FragColor = vec4(uColor * (along + head) * across * uAlpha * uBright, 1.0);
   }
@@ -306,6 +306,7 @@ export class Meteors {
         },
         vertexShader: meteorVert,
         fragmentShader: meteorFrag,
+        side: THREE.DoubleSide,
         blending: THREE.AdditiveBlending,
         transparent: true,
         depthWrite: false,

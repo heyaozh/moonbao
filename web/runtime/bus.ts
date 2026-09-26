@@ -23,6 +23,8 @@ export interface BusEvents {
   /** 已显现的正文全文（逐字增长） */
   "paced:text": { text: string };
   "paced:done": { text: string };
+  /** 预告：它接下来要说的话有多长（演示剧本用，短句会写得大） */
+  "moon:hint": { length: number; text?: string };
 }
 
 type Handler<K extends keyof BusEvents> = (payload: BusEvents[K]) => void;

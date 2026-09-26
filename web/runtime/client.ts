@@ -2,7 +2,7 @@
 // 每次连上都发 hello（服务端 30 分钟内视为同一会话，不会重复主动开口）。
 
 import type { ClientMessage, ServerEvent } from "../../shared/protocol";
-import type { SpeechAudio } from "../audio";
+import type { SpeechAudio } from "../audio/speech";
 import type { Bus } from "./bus";
 
 export class EngineClient {
