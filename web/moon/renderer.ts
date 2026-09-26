@@ -4,11 +4,12 @@
 
 import * as THREE from "three";
 import type { Action } from "../../shared/protocol";
-import type { CharacterRenderer } from "../runtime/renderer";
+import type { ActionSource, CharacterRenderer } from "../runtime/renderer";
 import { ActionRunner } from "./actions";
 import { Blinker } from "./blink";
 import { WindowCamera } from "./camera";
 import { Eyes } from "./eyes";
+import { Face, type MouthShape } from "./face";
 import { Spring, Spring3, approach, clamp, deg, drift } from "./math";
 import { params } from "./params";
 import { Sky, SkyBackdrop, skyColorsAt } from "./sky";
@@ -17,8 +18,10 @@ const moonVert = /* glsl */ `
   varying vec3 vN;
   varying vec3 vWorld;
   varying vec3 vObj;
+  varying vec2 vUv;
   void main() {
     vObj = position;
+    vUv = uv;
     vN = normalize(mat3(modelMatrix) * normal);
     vec4 w = modelMatrix * vec4(position, 1.0);
     vWorld = w.xyz;
@@ -35,9 +38,16 @@ const moonFrag = /* glsl */ `
   uniform float uRim;
   uniform vec3 uRimColor;
   uniform float uGlow;
+  uniform sampler2D uAlbedo;
+  uniform sampler2D uHeight;
+  uniform float uRealism;   // 0 光面 … 1 真实贴图
+  uniform float uBump;      // 高程 → 法线扰动强度
+  uniform float uSelfGlow;  // 表面自发光（封顶 0.2）
+  uniform vec3 uSelfGlowColor;
   varying vec3 vN;
   varying vec3 vWorld;
   varying vec3 vObj;
+  varying vec2 vUv;
 
   float hash(vec3 p) {
     p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3));
@@ -55,10 +65,25 @@ const moonFrag = /* glsl */ `
   }
   void main() {
     vec3 N = normalize(vN);
+    // 高程贴图 → 法线扰动（只改光照，轮廓永远是圆）
+    if (uRealism > 0.001 && abs(uBump) > 0.001) {
+      vec2 e = vec2(1.0 / 1024.0, 1.0 / 512.0);
+      float h0 = texture2D(uHeight, vUv).r;
+      float dhu = texture2D(uHeight, vUv + vec2(e.x, 0.0)).r - h0;
+      float dhv = texture2D(uHeight, vUv + vec2(0.0, e.y)).r - h0;
+      vec3 T = normalize(cross(vec3(0.0, 1.0, 0.0), N));
+      vec3 B = cross(N, T);
+      N = normalize(N - uBump * uRealism * 40.0 * (dhu * T - dhv * B));
+    }
     float d = dot(N, uSunDir);
     float lit = smoothstep(-uSoft, uSoft, d);
     float mot = (vnoise(vObj * 6.0) - 0.5) * uMottle + (vnoise(vObj * 15.0) - 0.5) * uMottle * 0.5;
-    vec3 col = mix(uShade * uEarthshine, uLit, lit) * (1.0 + mot);
+    vec3 tex = texture2D(uAlbedo, vUv).rgb;
+    // 贴图平均反照率 ≈ 0.55；归一化后乘暖白，保住设定里的月色
+    vec3 texN = clamp(tex / 0.55, 0.3, 1.6);
+    vec3 litCol = mix(uLit * (1.0 + mot), uLit * texN, uRealism);
+    vec3 col = mix(uShade * uEarthshine * mix(vec3(1.0), texN, uRealism * 0.6), litCol, lit);
+    col += uSelfGlowColor * uSelfGlow * uGlow;
     vec3 V = normalize(cameraPosition - vWorld);
     float rim = pow(1.0 - max(dot(N, V), 0.0), 3.0) * uRim * uGlow;
     col += uRimColor * rim;
@@ -101,6 +126,10 @@ export class MoonRenderer implements CharacterRenderer {
   readonly sky = new Sky();
   readonly backdrop = new SkyBackdrop();
   readonly eyes = new Eyes();
+  readonly face: Face;
+  /** 嘴形覆盖（调试面板用；null = 由情绪决定） */
+  mouthOverride: MouthShape | null = null;
+  private texReady = { albedo: false, height: false };
   readonly actions = new ActionRunner();
   readonly blinker = new Blinker();
   readonly moon: THREE.Mesh<THREE.SphereGeometry, THREE.ShaderMaterial>;
@@ -160,12 +189,33 @@ export class MoonRenderer implements CharacterRenderer {
         uRim: { value: params.moon.rim },
         uRimColor: { value: new THREE.Color(params.moon.rimColor) },
         uGlow: { value: 1 },
+        uAlbedo: { value: null },
+        uHeight: { value: null },
+        uRealism: { value: 0 },
+        uBump: { value: params.moon.bumpStrength },
+        uSelfGlow: { value: params.moon.selfGlow },
+        uSelfGlowColor: { value: new THREE.Color(params.moon.selfGlowColor) },
       },
+    });
+    // 真实月面贴图异步加载；没到之前 uRealism 压成 0（光面）
+    const loader = new THREE.TextureLoader();
+    loader.load(params.moon.albedoUrl, (t) => {
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.wrapS = THREE.RepeatWrapping;
+      t.anisotropy = 4;
+      mat.uniforms.uAlbedo.value = t;
+      this.texReady.albedo = true;
+    });
+    loader.load(params.moon.heightUrl, (t) => {
+      t.wrapS = THREE.RepeatWrapping;
+      mat.uniforms.uHeight.value = t;
+      this.texReady.height = true;
     });
     this.moon = new THREE.Mesh(geo, mat);
     this.moon.renderOrder = 1;
     this.body.add(this.moon);
     this.body.add(this.eyes.face);
+    this.face = new Face(this.eyes.face);
 
     this.halo = new THREE.Sprite(
       new THREE.SpriteMaterial({ map: makeHaloTexture(), color: new THREE.Color(params.light.haloColor), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })
@@ -201,8 +251,8 @@ export class MoonRenderer implements CharacterRenderer {
     this.target.valence = clamp(valence, -1, 1);
     this.target.arousal = clamp(arousal, 0, 1);
   }
-  playAction(name: Action, intensity: number) {
-    this.actions.play(name, intensity);
+  playAction(name: Action, intensity: number, source: ActionSource = "brain") {
+    if (!this.actions.play(name, intensity, source)) return; // 被更高优先级的动作挡住
     if (name === "bounce" || name === "spin") this.blinker.blinkNow(false);
     if (name === "shiver" || name === "hide_edge") this.blinker.blinkNow(true);
   }
@@ -263,6 +313,14 @@ export class MoonRenderer implements CharacterRenderer {
     this.pos.setTarget(driftX + pose.dx + this.swayX.x, driftY + pose.dy + this.swayY.x, -P.space.moonDepth + pose.dz);
     this.rot.setTarget(pose.yaw, pose.pitch, pose.roll + driftRoll);
     this.bodyYaw.target = pose.bodyYaw;
+    // roll / spin 转完整圈后，把弹簧的当前角减掉整圈数：否则目标回到 0 时它会倒着转回去一整圈
+    if (!this.actions.current) {
+      const TAU = Math.PI * 2;
+      for (const sp of [this.rot.s[0], this.bodyYaw]) {
+        const k = Math.round(sp.x / TAU);
+        if (k !== 0) sp.x -= k * TAU;
+      }
+    }
     this.pos.step(dt);
     this.rot.step(dt);
     this.bodyYaw.step(dt);
@@ -296,6 +354,10 @@ export class MoonRenderer implements CharacterRenderer {
     u.uMottle.value = P.moon.mottle;
     u.uRim.value = P.moon.rim;
     u.uGlow.value = this.glow;
+    u.uRealism.value = this.texReady.albedo ? P.moon.surfaceRealism : 0;
+    u.uBump.value = this.texReady.height ? P.moon.bumpStrength : 0;
+    u.uSelfGlow.value = Math.min(P.moon.selfGlow, P.moon.selfGlowMax);
+    (u.uSelfGlowColor.value as THREE.Color).set(P.moon.selfGlowColor);
     (u.uLit.value as THREE.Color).set(P.moon.litColor);
     (u.uShade.value as THREE.Color).set(P.moon.shadeColor);
     (u.uRimColor.value as THREE.Color).set(P.moon.rimColor);
@@ -320,6 +382,17 @@ export class MoonRenderer implements CharacterRenderer {
       roll: this.rot.z,
     });
 
+    // 嘴：动作给的优先，否则面板覆盖，否则由情绪决定（心情好 → 微笑；活力高且心情中性 → o；难过 → 平）
+    const v = this.cur.valence;
+    const mouth: MouthShape =
+      pose.mouth ?? this.mouthOverride ?? (v > 0.25 ? "smile" : arousal > 0.6 && Math.abs(v) < 0.35 ? "o" : v < -0.3 ? "flat" : "smile");
+    this.face.setShape(mouth);
+    this.face.smileAmount = clamp(0.35 + 0.65 * v, 0.2, 1);
+    // 腮红：底值 + 开心加深 + 动作（害羞）加深
+    const B = P.blush;
+    const blushT = clamp(B.opacityBase + (B.opacityMax - B.opacityBase) * Math.max(clamp(v, 0, 1) * 0.5, pose.blush ?? 0), 0, 1);
+    this.face.update(dt, this.eyes.eyeY, blushT, 1 - eyeLit);
+
     // 光晕：跟着月亮，在它后面一点
     const night = this.updateBackground();
     // 和月心同一深度：球的前半面挡住光晕中心，倾斜时光晕不会和月亮错位
@@ -331,7 +404,7 @@ export class MoonRenderer implements CharacterRenderer {
 
     // 夜空
     const shortPx = Math.min(this.w, this.h) * this.gl.getPixelRatio();
-    this.sky.update(dt, shortPx / 2, P.sky.dayStarVisibility + (1 - P.sky.dayStarVisibility) * night);
+    this.sky.update(dt, shortPx / 2, P.sky.dayStarVisibility + (1 - P.sky.dayStarVisibility) * night, this.cam.eye);
 
     // 渲染（帧率上限）
     const isTouch = matchMedia("(pointer: coarse)").matches;

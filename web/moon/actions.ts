@@ -3,7 +3,9 @@
 // 主动运动先反向蓄力（anticipation）：lean_in 先往后缩一点再冲过来。
 
 import type { Action } from "../../shared/protocol";
+import type { ActionSource } from "../runtime/renderer";
 import type { EyeShape } from "./eyes";
+import type { MouthShape } from "./face";
 import { deg, easeInOut, easeOut } from "./math";
 import { params } from "./params";
 
@@ -31,6 +33,10 @@ export interface Pose {
   secondEye: number;
   /** 本帧要触发一次压扁脉冲 */
   squashPulse: boolean;
+  /** 嘴形强制（null = 由情绪决定） */
+  mouth: MouthShape | null;
+  /** 腮红加深量 0..1（null = 由情绪决定） */
+  blush: number | null;
   done: boolean;
 }
 
@@ -46,7 +52,7 @@ export interface ActionCtx {
 
 export const IDLE_POSE: Pose = {
   dx: 0, dy: 0, dz: 0, yaw: 0, pitch: 0, roll: 0, bodyYaw: 0,
-  glow: null, gazeX: 0, gazeY: 0, shape: null, lidCap: 1, secondEye: 1, squashPulse: false, done: false,
+  glow: null, gazeX: 0, gazeY: 0, shape: null, lidCap: 1, secondEye: 1, squashPulse: false, mouth: null, blush: null, done: false,
 };
 
 type ActionFn = (t: number, k: number, ctx: ActionCtx, pose: Pose) => void;
@@ -83,6 +89,7 @@ const fns: Record<Action, ActionFn> = {
       p.gazeX = -0.3 * e.w;
       p.secondEye = 1 - 0.7 * e.w;
       p.shape = e.w > 0.9 ? "round" : null;
+      p.mouth = e.w > 0.5 ? "o" : null;
       p.done = e.done;
       return;
     }
@@ -111,6 +118,7 @@ const fns: Record<Action, ActionFn> = {
     p.gazeX = a.gazeX * e.w;
     p.gazeY = -a.gazeY * e.w; // 参数里 -0.6 表示往上看
     p.dy = 0.03 * e.w;
+    p.mouth = e.w > 0.3 ? "flat" : null;
     p.done = e.done;
   },
 
@@ -127,6 +135,7 @@ const fns: Record<Action, ActionFn> = {
     const h = a.height * (0.6 + 0.4 * k) * (1 - i * 0.3);
     p.dy = h * Math.sin(Math.PI * u);
     p.shape = k > 0.5 ? "squint" : null;
+    p.mouth = "smile";
     // 落地那一帧压扁
     p.squashPulse = u < 0.06 && i > 0;
   },
@@ -137,6 +146,8 @@ const fns: Record<Action, ActionFn> = {
     p.yaw = Math.PI * 2 * easeInOut(u);
     p.bodyYaw = p.yaw;
     p.dx = -0.06 * Math.sin(Math.PI * u);
+    p.blush = 1; // 害羞地转过去
+    p.mouth = "flat";
     p.done = u >= 1;
   },
 
@@ -148,6 +159,7 @@ const fns: Record<Action, ActionFn> = {
     p.bodyYaw = p.yaw;
     p.dy = 0.08 * Math.sin(Math.PI * u);
     p.shape = "squint";
+    p.mouth = "smile";
     p.done = u >= 1;
   },
 
@@ -160,6 +172,7 @@ const fns: Record<Action, ActionFn> = {
     if (t < tOut) {
       p.dx = outX * easeOut(t / tOut);
       p.shape = "dot";
+      p.mouth = "o";
     } else if (t < tOut + tHide) {
       p.dx = outX;
     } else if (t < tOut + tHide + tPeek) {
@@ -196,6 +209,7 @@ const fns: Record<Action, ActionFn> = {
     p.dy = -a.sink * e.w;
     p.lidCap = 1 - 0.45 * e.w;
     p.gazeY = -0.4 * e.w;
+    p.mouth = e.w > 0.3 ? "flat" : null;
     p.done = e.done;
   },
 
@@ -205,6 +219,8 @@ const fns: Record<Action, ActionFn> = {
     p.glow = 1 + (params.light.glowMax - 1) * e.w * (0.6 + 0.4 * k);
     p.dy = a.rise * e.w;
     p.shape = e.w > 0.5 && k > 0.4 ? "squint" : null;
+    p.mouth = "smile";
+    p.blush = 0.5 * e.w;
     p.done = e.done;
   },
 
@@ -219,25 +235,33 @@ const fns: Record<Action, ActionFn> = {
     p.dx = a.amp * (0.6 + 0.4 * k) * Math.sin(2 * Math.PI * a.freq * t) * env;
     p.roll = deg(1.5) * Math.sin(2 * Math.PI * a.freq * 0.7 * t) * env;
     p.shape = "dot";
+    p.mouth = "o";
   },
 };
 
+const PRIORITY: Record<ActionSource, number> = { reflex: 0, brain: 1, manual: 2 };
+
 export class ActionRunner {
-  private cur: { name: Action; k: number; t: number; side: 1 | -1 } | null = null;
+  private cur: { name: Action; k: number; t: number; side: 1 | -1; prio: number } | null = null;
   readonly pose: Pose = { ...IDLE_POSE };
 
   get current(): Action | null {
     return this.cur?.name ?? null;
   }
 
-  play(name: Action, intensity: number) {
+  /** 低优先级的来源不打断正在进行的高优先级动作（返回 false = 被忽略）。同级或更高会替换。 */
+  play(name: Action, intensity: number, source: ActionSource = "brain"): boolean {
+    const prio = PRIORITY[source];
     if (name === "idle_drift") {
+      if (this.cur && this.cur.prio > prio) return false;
       this.cur = null;
-      return;
+      return true;
     }
+    if (this.cur && this.cur.prio > prio) return false;
     const cfgSide = params.actions.hide_edge.side;
     const side: 1 | -1 = cfgSide === "left" ? -1 : cfgSide === "right" ? 1 : Math.random() < 0.5 ? -1 : 1;
-    this.cur = { name, k: Math.max(0, Math.min(1, intensity)), t: 0, side };
+    this.cur = { name, k: Math.max(0, Math.min(1, intensity)), t: 0, side, prio };
+    return true;
   }
 
   update(dt: number, ctx: Omit<ActionCtx, "side">): Pose {

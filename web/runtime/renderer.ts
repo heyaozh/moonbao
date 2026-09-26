@@ -3,10 +3,14 @@
 
 import type { Action } from "../../shared/protocol";
 
+/** 动作来源：manual = 调试面板 / 用户戳；brain = LLM 首行头；reflex = Tier 0 反射。
+ *  优先级 manual > brain > reflex：低优先级的动作不打断正在进行的高优先级动作（反射只填空，不抢戏）。 */
+export type ActionSource = "manual" | "brain" | "reflex";
+
 export interface CharacterRenderer {
   /** 情绪目标（渲染层自己做惯性，不许瞬变） */
   setEmotion(valence: number, arousal: number): void;
-  playAction(name: Action, intensity: number): void;
+  playAction(name: Action, intensity: number, source?: ActionSource): void;
   setListening(on: boolean): void;
   setSpeaking(on: boolean): void;
   update(dt: number): void;
@@ -34,7 +38,7 @@ export class PlaceholderRenderer implements CharacterRenderer {
     this.target.valence = Math.max(-1, Math.min(1, valence));
     this.target.arousal = Math.max(0, Math.min(1, arousal));
   }
-  playAction(name: Action, intensity: number) {
+  playAction(name: Action, intensity: number, _source?: ActionSource) {
     if (name === "idle_drift") return;
     this.kick = 0.6 + intensity * 0.6;
     this.label = name;
@@ -82,8 +86,8 @@ export class StubRenderer implements CharacterRenderer {
   setEmotion(v: number, a: number) {
     this.line(`情绪 v=${v.toFixed(2)} a=${a.toFixed(2)}`);
   }
-  playAction(name: Action, i: number) {
-    this.line(`动作 ${name} ×${i.toFixed(1)}`);
+  playAction(name: Action, i: number, source: ActionSource = "brain") {
+    this.line(`动作 ${name} ×${i.toFixed(1)}${source === "brain" ? "" : ` [${source}]`}`);
   }
   setListening(on: boolean) {
     this.line(on ? "在听" : "不听了");
@@ -100,8 +104,8 @@ export class FanoutRenderer implements CharacterRenderer {
   setEmotion(v: number, a: number) {
     for (const t of this.targets) t.setEmotion(v, a);
   }
-  playAction(n: Action, i: number) {
-    for (const t of this.targets) t.playAction(n, i);
+  playAction(n: Action, i: number, source?: ActionSource) {
+    for (const t of this.targets) t.playAction(n, i, source);
   }
   setListening(on: boolean) {
     for (const t of this.targets) t.setListening(on);

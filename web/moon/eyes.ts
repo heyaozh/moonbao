@@ -7,6 +7,16 @@ import { Spring, clamp, lerp } from "./math";
 import { params } from "./params";
 
 const Z_AXIS = new THREE.Vector3(0, 0, 1);
+const _p = new THREE.Vector3();
+
+/** 把一个朝 +z 的平面放到单位球面 (x, y) 处（半径为单位），贴着球面朝外，略微抬高避免 z-fight。 */
+export function placeOnSphere(obj: THREE.Object3D, x: number, y: number, radius: number) {
+  const r2 = x * x + y * y;
+  const z = Math.sqrt(Math.max(0.05, 1 - r2));
+  _p.set(x, y, z);
+  obj.quaternion.setFromUnitVectors(Z_AXIS, _p.clone().normalize());
+  obj.position.copy(_p).multiplyScalar(radius * 1.012);
+}
 
 export type EyeShape = "round" | "squint" | "dot" | "closed";
 
@@ -104,9 +114,10 @@ export class Eyes {
   readonly gazeY: Spring;
   private colorNormal = new THREE.Color(params.eyes.color);
   private colorShade = new THREE.Color("#9aa8cc");
-  private tmp = new THREE.Vector3();
   private dazeScale = 1;
   private secondEyeOpacity = 1;
+  /** 两眼中点在球面上的高度（半径为单位），嘴和腮红以它定位 */
+  eyeY = 0;
 
   constructor() {
     const textures: Record<EyeShape, THREE.Texture> = {
@@ -156,6 +167,7 @@ export class Eyes {
     const gx = this.gazeX.x * p.gazeRange;
     const gy = this.gazeY.x * p.gazeRange;
     const y0 = (p.height - 0.5) * 2 * 0.85 + gy; // 0.85：别贴到球的顶/底
+    this.eyeY = y0;
     const half = p.spacing / 2;
     this.place(this.left, -half + gx, y0, radius);
     this.place(this.right, half + gx, y0, radius);
@@ -177,11 +189,7 @@ export class Eyes {
 
   /** 把眼睛放到球面上（x, y 以半径为单位），并让平面贴着球面朝外。 */
   private place(e: Eye, x: number, y: number, radius: number) {
-    const r2 = x * x + y * y;
-    const z = Math.sqrt(Math.max(0.05, 1 - r2));
-    this.tmp.set(x, y, z);
-    e.root.quaternion.setFromUnitVectors(Z_AXIS, this.tmp.clone().normalize());
-    e.root.position.copy(this.tmp).multiplyScalar(radius * 1.012);
+    placeOnSphere(e.root, x, y, radius);
   }
 
   /** 特写时另一只眼淡出（0 = 全隐），下一帧 update 生效。 */
