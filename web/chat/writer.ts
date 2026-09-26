@@ -229,6 +229,9 @@ export class MoonText {
   height = 0;
   /** 最后一个字揭完的时间 */
   finishAt = 0;
+  /** 每个字开始揭开时（写字的音） */
+  onGlyph?: () => void;
+  private revealedCount = 0;
 
   private bigK = 1;
   get isBig() {
@@ -465,6 +468,13 @@ export class MoonText {
 
   /** 每帧：笔锋位置、透明度、光点。 */
   update(now: number, bufferW: number, bufferH: number, pixelRatio: number) {
+    // 数一数已经开始揭开的字（不含空白），多出来的每个字响一个音
+    let started = 0;
+    for (const lo of this.lines) for (let i = 0; i < lo.layout.chars.length; i++) if (lo.revealAt[i] != null && now >= lo.revealAt[i] && !/\s/.test(lo.layout.chars[i].ch)) started++;
+    if (started > this.revealedCount) {
+      for (let k = this.revealedCount; k < started; k++) this.onGlyph?.();
+      this.revealedCount = started;
+    }
     for (const lo of this.lines) {
       // 笔锋 = 最后一个开始揭开的字，揭到哪了
       let front = 0;

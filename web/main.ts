@@ -11,6 +11,7 @@ import { App } from "./app/app";
 import { Panel } from "./app/panel";
 import { applyScene, SCENES, type SceneCtx } from "./app/scenes";
 import { Mic, toBase64 } from "./audio/mic";
+import { SoundEngine } from "./audio/synth";
 import { ChatView } from "./chat/chatview";
 import { DemoBrain } from "./chat/demo";
 import { FONT_CANDIDATES, fontState, type FontName } from "./chat/glyphs";
@@ -27,12 +28,28 @@ document.title = `Moonbao · ${CHARACTER_NAME}`;
 
 const canvas = document.getElementById("moonCanvas") as HTMLCanvasElement;
 const app = new App(canvas);
+// 声音：浏览器要求第一次触碰后才能出声
+const sound = new SoundEngine();
+const unlock = () => void sound.unlock();
+addEventListener("pointerdown", unlock, { once: true });
+addEventListener("keydown", unlock, { once: true });
 
 // ---------- 不聊天也好玩：手势 + 小日子 ----------
 const interact = new MoonInteraction(app.moon, app.stage.cam, canvas, {
-  onPoke: () => life.notifyActivity(),
-  onGrab: () => life.notifyActivity(),
-  onBounce: () => life.notifyActivity(),
+  onPoke: () => {
+    life.notifyActivity();
+    sound.poke();
+  },
+  onGrab: () => {
+    life.notifyActivity();
+    sound.grab();
+  },
+  onRelease: (v) => sound.release(v),
+  onBounce: (v) => {
+    life.notifyActivity();
+    sound.bounce(v);
+  },
+  onDizzy: () => sound.dizzy(),
   onTapSky: () => life.notifyActivity(),
   // 在星空上往下拖 = 把远处（更早）的对话拉近
   onSkyDrag: (dy) => chat.scrollBy(dy / 260),
@@ -43,17 +60,27 @@ app.stage.back.add(life.star.points);
 // ---------- 对话画面 + 演示大脑 + 玻璃界面 ----------
 if (q.has("font") && q.get("font")! in FONT_CANDIDATES) fontState.en = q.get("font") as FontName;
 const chat = new ChatView(app);
+chat.onGlyph = () => sound.glyph();
+app.world.meteors.onSpawn = () => sound.meteor();
 const demo = new DemoBrain(app.bus);
 const mic = new Mic();
 const ui = new GlassUI(app.bus, chat, app.stage.cam, {
   send(text) {
     life.notifyActivity();
+    sound.send();
+    sound.resetGlyphs();
     if (app.client.connected) app.client.send({ type: "text", text });
     else demo.reply(text);
   },
-  voiceStart: () => mic.start(),
+  async voiceStart() {
+    const ok = await mic.start();
+    if (ok) sound.holeStart();
+    return ok;
+  },
   async voiceStop() {
+    sound.holeStop();
     const rec = await mic.stop();
+    if (rec) sound.shimmer();
     if (!rec) return null;
     if (app.client.connected && voiceOnServer) {
       // 真识别：交给服务端（本机 whisper）；识别结果经 engine:transcript 回来
@@ -63,7 +90,12 @@ const ui = new GlassUI(app.bus, chat, app.stage.cam, {
     // 没有识别服务：演示里用一句示例话
     return ["Will you stay with me?", "Long day.", "I'm a bit nervous today."][Math.floor(Math.random() * 3)];
   },
-  voiceLevel: () => mic.level(),
+  voiceLevel: () => {
+    const v = mic.level();
+    sound.holeLevelSet(v);
+    return v;
+  },
+  openSettings: () => sound.tick(),
 });
 let voiceOnServer = false;
 let transcriptWaiter: ((t: string | null) => void) | null = null;
@@ -95,6 +127,9 @@ app.bus.on("engine:state", ({ value }) => chat.setThinking(value === "thinking")
 app.bus.on("moon:hint", ({ length, text }) => chat.hint(length, text));
 app.bus.on("user:typing", () => life.notifyActivity());
 app.onTick((dt) => {
+  sound.night = app.world.state.night;
+  sound.mood = app.moon.emotion.valence;
+  sound.update(dt);
   interact.update(dt);
   demo.update(dt);
   chat.update(dt);
@@ -272,6 +307,25 @@ if (q.get("panel") === "off") panel.root.hidden = true;
   panel.buttons(s, [["放一颗流星", () => app.world.meteors.spawn(app.stage.cam)], ["自动摇", () => (app.stage.cam.autoShake = !app.stage.cam.autoShake)]]);
 }
 {
+  const s = panel.section("声音");
+  panel.checkbox(s, "静音", () => params.sound.muted, (v) => {
+    params.sound.muted = v;
+    sound.applyVolumes();
+  });
+  panel.slider(s, "氛围", 0, 1, 0.01, () => params.sound.ambient, (v) => {
+    params.sound.ambient = v;
+    sound.applyVolumes();
+  });
+  panel.slider(s, "音效", 0, 1, 0.01, () => params.sound.sfx, (v) => {
+    params.sound.sfx = v;
+    sound.applyVolumes();
+  });
+  panel.param(s, "根音 MIDI", "sound.rootMidi", 48, 74, 1);
+  panel.param(s, "钟声最短", "sound.chimeMin", 1, 30, 0.5);
+  panel.param(s, "钟声最长", "sound.chimeMax", 2, 60, 0.5);
+  panel.buttons(s, [["试：流星", () => sound.meteor()], ["试：戳", () => sound.poke()], ["试：撞", () => sound.bounce(4)], ["试：写字", () => sound.glyph()], ["试：发送", () => sound.send()], ["试：闪光", () => sound.shimmer()]]);
+}
+{
   const s = panel.section("后期");
   panel.param(s, "曝光", "post.exposure", 0.3, 2.5);
   panel.param(s, "辉光", "post.bloomStrength", 0, 2);
@@ -340,8 +394,10 @@ declare global {
     __life: Behaviors;
     __chat: ChatView;
     __demo: DemoBrain;
+    __sound: SoundEngine;
   }
 }
+window.__sound = sound;
 window.__chat = chat;
 window.__demo = demo;
 window.__interact = interact;

@@ -38,6 +38,8 @@ export class ChatView {
   private lastChatAt = -1e9;
   private histStars: THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial>;
   private lookUntil = 0;
+  /** 写字时每个字的回调（声音） */
+  onGlyph?: () => void;
   /** 语音时的音量（0..1），驱动黑洞的漩涡与生长 */
   private voiceLevel = 0;
   private voiceStart = 0;
@@ -110,6 +112,7 @@ export class ChatView {
       style
     );
     e.text.grand = !!opts.grand || userText == null;
+    e.text.onGlyph = () => this.onGlyph?.();
     e.text.group.rotation.z = THREE.MathUtils.degToRad(W.tiltDeg);
     e.group.add(e.text.group);
     this.layout(e);
