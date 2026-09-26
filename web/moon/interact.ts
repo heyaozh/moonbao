@@ -17,6 +17,8 @@ export interface InteractEvents {
   onRelease?: (speed: number) => void;
   onDizzy?: () => void;
   onTapSky?: (nx: number, ny: number) => void;
+  /** 在星空上上下拖（翻历史）：dy = 这次移动的像素（向下为正） */
+  onSkyDrag?: (dy: number) => void;
 }
 
 const TAP_MS = 260;
@@ -33,6 +35,7 @@ export class MoonInteraction {
   private grabLocal = new THREE.Vector3();
   private pointerTarget = new THREE.Vector3();
   private history: { t: number; p: THREE.Vector3 }[] = [];
+  private lastY = 0;
   private down: { id: number; x: number; y: number; t: number; onMoon: boolean; hit: THREE.Vector3 | null; moved: boolean } | null = null;
   private longTimer: ReturnType<typeof setTimeout> | null = null;
   private nuzzling = false;
@@ -61,6 +64,14 @@ export class MoonInteraction {
     addEventListener("pointerup", (e) => this.onUp(e));
     addEventListener("pointercancel", (e) => this.onUp(e));
     canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+    canvas.addEventListener(
+      "wheel",
+      (e) => {
+        e.preventDefault();
+        this.ev.onSkyDrag?.(-e.deltaY * 0.6);
+      },
+      { passive: false }
+    );
     // 摇手机
     let lastA: number | null = null;
     addEventListener("devicemotion", (e) => {
@@ -115,6 +126,11 @@ export class MoonInteraction {
       d.moved = true;
       if (this.longTimer) clearTimeout(this.longTimer);
       if (d.onMoon && !this.nuzzling) this.startGrab(d.hit!);
+      this.lastY = e.clientY;
+    }
+    if (d.moved && !d.onMoon) {
+      this.ev.onSkyDrag?.(e.clientY - this.lastY);
+      this.lastY = e.clientY;
     }
     if (this.grabbed) {
       const n = this.ndc(e);

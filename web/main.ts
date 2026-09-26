@@ -34,6 +34,8 @@ const interact = new MoonInteraction(app.moon, app.stage.cam, canvas, {
   onGrab: () => life.notifyActivity(),
   onBounce: () => life.notifyActivity(),
   onTapSky: () => life.notifyActivity(),
+  // 在星空上往下拖 = 把远处（更早）的对话拉近
+  onSkyDrag: (dy) => chat.scrollBy(dy / 260),
 });
 const life = new Behaviors(app.moon, app.world, app.stage.cam, interact, () => app.stage.pixelRatio);
 app.stage.back.add(life.star.points);
