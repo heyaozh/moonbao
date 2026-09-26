@@ -6,12 +6,14 @@ import type { DemoBrain } from "../chat/demo";
 import { EXPR_NAMES, type ExprName } from "../moon/expressions";
 import type { Behaviors } from "../moon/behaviors";
 import { params } from "../moon/params";
+import type { Onboarding } from "../ui/onboarding";
 import type { App } from "./app";
 
 export interface SceneCtx {
   chat: ChatView;
   demo: DemoBrain;
   life: Behaviors;
+  onboarding?: Onboarding;
 }
 
 export interface Scene {
@@ -26,6 +28,7 @@ export interface Scene {
 let timers: ReturnType<typeof setInterval>[] = [];
 
 function base(app: App, x: SceneCtx, opts: { keepChat?: boolean } = {}) {
+  if (x.onboarding?.active) x.onboarding.finish();
   for (const t of timers) clearInterval(t);
   timers = [];
   app.world.sunAltOverride = -30;
@@ -229,6 +232,14 @@ export const SCENES: Record<string, Scene> = {
         t += 0.05;
         x.chat.setVoiceLevel(0.35 + 0.35 * Math.abs(Math.sin(t * 5.3) * Math.sin(t * 1.7)));
       }, 50));
+    },
+  },
+  onboarding: {
+    label: "首次见面",
+    apply(app, x) {
+      base(app, x);
+      params.light.phaseDeg = 0;
+      x.onboarding?.start();
     },
   },
   demo: {

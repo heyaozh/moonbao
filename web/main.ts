@@ -15,7 +15,10 @@ import { SoundEngine } from "./audio/synth";
 import { ChatView } from "./chat/chatview";
 import { DemoBrain } from "./chat/demo";
 import { FONT_CANDIDATES, fontState, type FontName } from "./chat/glyphs";
+import { Onboarding } from "./ui/onboarding";
+import { loadProfile, loadUserSettings, SettingsSheet, uiLang } from "./ui/settings";
 import { GlassUI } from "./ui/ui";
+import { loadLocation } from "./astro/location";
 import { CHARACTER_NAME } from "./config";
 import { Behaviors } from "./moon/behaviors";
 import { EXPR_LABELS, EXPR_NAMES } from "./moon/expressions";
@@ -23,6 +26,9 @@ import { MoonInteraction } from "./moon/interact";
 import { params } from "./moon/params";
 
 const q = new URLSearchParams(location.search);
+// 用户在设置里调过的偏好（声音、画面）先盖到 params 上，再建场景
+loadUserSettings();
+const profile = loadProfile();
 const BRAIN = q.get("brain") !== "off";
 document.title = `Moonbao · ${CHARACTER_NAME}`;
 
@@ -69,6 +75,7 @@ const ui = new GlassUI(app.bus, chat, app.stage.cam, {
     life.notifyActivity();
     sound.send();
     sound.resetGlyphs();
+    if (onboarding.handleInput(text)) return;
     if (app.client.connected) app.client.send({ type: "text", text });
     else demo.reply(text);
   },
@@ -95,8 +102,36 @@ const ui = new GlassUI(app.bus, chat, app.stage.cam, {
     sound.holeLevelSet(v);
     return v;
   },
-  openSettings: () => sound.tick(),
+  openSettings: () => {
+    sound.tick();
+    settings.toggle();
+  },
 });
+// ---------- 设置 + 首次见面 ----------
+const sendProfile = () => {
+  if (app.client.connected) app.client.send({ type: "profile", userName: profile.userName || undefined, moonName: profile.moonName || undefined });
+};
+const settings = new SettingsSheet(profile, () => app.world.location.label);
+/** 界面文字跟着设置里的语言走（默认跟系统语言；用户主要是英文） */
+function applyLang() {
+  const zh = uiLang(profile) === "zh";
+  if (!onboarding?.active) ui.input.placeholder = zh ? "想和月亮说些什么…" : "Say something to the moon…";
+  ui.voiceBtn.setAttribute("aria-label", zh ? "按住说话" : "Hold to talk");
+  ui.settingsBtn.setAttribute("aria-label", zh ? "设置" : "Settings");
+  const g = document.querySelector("#gyroBtn span");
+  if (g) g.textContent = zh ? "倾斜手机，看看盒子里面" : "Tilt your phone to look inside";
+  document.documentElement.lang = zh ? "zh-CN" : "en";
+}
+settings.onChange = (what) => {
+  if (what === "sound") sound.applyVolumes();
+  if (what === "profile") sendProfile();
+  if (what === "sky") app.world.location = loadLocation();
+  if (what === "lang") applyLang();
+};
+const onboarding = new Onboarding(app, chat, demo, interact, life, profile, ui.input);
+onboarding.onDone = sendProfile;
+applyLang();
+app.bus.on("engine:hello", sendProfile);
 let voiceOnServer = false;
 let transcriptWaiter: ((t: string | null) => void) | null = null;
 function pendingTranscript() {
@@ -133,6 +168,11 @@ const pushLat = (k: string, v: number) => {
   if (lat[k].length > 10) lat[k].shift();
 };
 app.bus.on("user:send", () => (sentAt = performance.now()));
+// 你一抢话，它没说完的那句就停（已写出的留在上一轮）：演示大脑作废剩下的拍子，真大脑作废这一轮生成
+app.bus.on("user:barge", () => {
+  demo.interrupt();
+  if (app.client.connected) app.client.send({ type: "interrupt" });
+});
 app.bus.on("engine:reflex", (r) => {
   if (sentAt) pushLat("reflex", performance.now() - sentAt);
   app.moon.setEmotion(r.valence, r.arousal);
@@ -164,6 +204,7 @@ app.bus.on("engine:reply_done", () => {
 const median = (a: number[]) => (a.length ? [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)] : NaN);
 app.bus.on("user:typing", () => life.notifyActivity());
 app.onTick((dt) => {
+  onboarding.update(dt);
   sound.night = app.world.state.night;
   sound.mood = app.moon.emotion.valence;
   sound.update(dt);
@@ -175,10 +216,12 @@ app.onTick((dt) => {
   life.paused = app.moon.chatMode;
   life.update(dt);
 });
-const sceneCtx: SceneCtx = { chat, demo, life };
+const sceneCtx: SceneCtx = { chat, demo, life, onboarding };
 
 const sceneName = applyScene(app, q.get("scene") ?? "real", sceneCtx);
-if (!q.has("scene") || sceneName === "real") life.playOpening();
+// 第一次打开：首次见面；以后打开：它正在做自己的事，被你发现
+if (!q.has("scene") && !profile.onboarded) onboarding.start();
+else if (!q.has("scene") || sceneName === "real") life.playOpening();
 if (q.has("hour")) app.world.hourOverride = Number(q.get("hour"));
 if (q.has("phase")) params.light.phaseDeg = Number(q.get("phase"));
 app.start();
@@ -387,7 +430,7 @@ setInterval(() => {
   const c = app.stage.cam;
   const st = app.world.state;
   const ms = (v: number) => (Number.isFinite(v) ? `${Math.round(v)}` : "—");
-  fpsEl.textContent = `延迟 p50（ms）反应 ${ms(median(lat.reflex))} · 表情 ${ms(median(lat.emotion))} · 首字 ${ms(median(lat.text))} · 完 ${ms(median(lat.done))} ｜ fps ${app.fps.toFixed(0)} · 倾斜 ${c.tilt.x.toFixed(0)}°/${c.tilt.y.toFixed(0)}° · 太阳 ${st.tone.sunAltDeg.toFixed(1)}° · 月相 ${(st.phase.illuminated * 100).toFixed(0)}% · ${app.world.location.label}`;
+  fpsEl.textContent = `延迟 p50（ms）反应 ${ms(median(lat.reflex))} · 表情 ${ms(median(lat.emotion))} · 首字 ${ms(median(lat.text))} · 完 ${ms(median(lat.done))} ｜ fps ${app.fps.toFixed(0)} · 画质 ${app.stage.quality} 档 · 倾斜 ${c.tilt.x.toFixed(0)}°/${c.tilt.y.toFixed(0)}° · 太阳 ${st.tone.sunAltDeg.toFixed(1)}° · 月相 ${(st.phase.illuminated * 100).toFixed(0)}% · ${app.world.location.label}`;
 }, 500);
 
 // ---------- 无头验收工具 ----------
@@ -425,6 +468,7 @@ declare global {
     __scene: (name: string) => void;
     __act: (name: Action, intensity?: number) => void;
     __step: (seconds?: number) => void;
+    __pause: (on?: boolean) => boolean;
     __snapSave: typeof snapSave;
     __recordGif: typeof recordGif;
     __tilt: (xDeg: number, yDeg: number) => void;
@@ -444,6 +488,7 @@ window.__app = app;
 window.__params = params;
 window.__scene = (name) => void applyScene(app, name, sceneCtx);
 window.__act = (name, intensity = 0.7) => app.moon.playAction(name, intensity, "manual");
+window.__pause = (on = true) => (app.paused = on);
 window.__step = (seconds = 1) => {
   const n = Math.ceil(seconds * 60);
   for (let i = 0; i < n; i++) app.step(1 / 60);

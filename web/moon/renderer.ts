@@ -219,7 +219,7 @@ export class MoonRenderer implements CharacterRenderer {
     // 眨眼：只作用在「睁着的圆眼」上；^ ^ / >< / @ 不眨
     this.blinker.lidCap = pose.lidCap;
     this.blinker.update(dt, this.cur.valence, arousal);
-    const blinkable = 1 - clamp(face.happy + face.squeeze + face.dizzy, 0, 1);
+    const blinkable = 1 - clamp(face.happy + face.squeeze + face.dizzy + face.closed, 0, 1);
     const open = 1 - (1 - this.blinker.openness) * blinkable;
     const daze = this.blinker.daze;
     const squint = this.blinker.shape === "squint" && name !== "sad" ? 1 : 0;

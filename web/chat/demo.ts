@@ -82,14 +82,16 @@ export class DemoBrain {
     this.beats.sort((a, b) => a.at - b.at);
   }
 
+  /** 打断：还没说完的那句作废（已经写出来的由 ChatView 在新一轮开始时收尾，和真引擎的抢话一致） */
+  interrupt() {
+    const n = this.beats.length;
+    this.beats = this.beats.filter((b) => b.gen == null);
+    if (this.beats.length !== n) this.bus.emit("engine:state", { value: "idle" });
+  }
+
   /** 回一句：先想一下，再表情，再逐字 */
   reply(user: string, r: Reply = cannedReply(user), opts: { holdThinking?: boolean } = {}) {
-    // 打断上一句：没说完的部分作废，已经写出来的收尾
-    const old = this.beats.filter((b) => b.gen != null);
-    if (old.length) {
-      this.beats = this.beats.filter((b) => b.gen == null);
-      if (this.lastShown) this.bus.emit("paced:done", { text: this.lastShown });
-    }
+    this.interrupt();
     const g = ++this.gen;
     const think = r.think ?? 0.9 + Math.random() * 0.5;
     this.at(0.05, () => this.bus.emit("engine:state", { value: "thinking" }), g);
@@ -101,33 +103,33 @@ export class DemoBrain {
     }, g);
     this.stream(r.text, think + 0.15, g);
   }
-  private lastShown = "";
 
   /** 它主动说一句（没有你的气泡） */
   say(text: string, v = 0.6, a = 0.5, act: Action = "brighten") {
+    const g = ++this.gen;
     this.at(0.05, () => {
       this.bus.emit("engine:proactive", { reason: "follow_up" });
       this.bus.emit("moon:hint", { length: [...text].length, text });
       this.bus.emit("paced:emotion", { valence: v, arousal: a });
       this.bus.emit("paced:action", { name: act, intensity: 0.6 });
       this.bus.emit("engine:state", { value: "speaking" });
-    });
-    this.stream(text, 0.3);
+    }, g);
+    this.stream(text, 0.3, g);
   }
 
   private stream(text: string, start: number, gen?: number) {
     const chars = [...text];
     let shown = "";
-    this.lastShown = "";
-    chars.forEach((ch, i) => {
-      this.at(start + i / this.cps + (/[，。！？,.!?…]/.test(ch) ? 0.08 : 0), () => {
+    // 标点后面喘一口气（整句往后顺延，字的先后不会乱）
+    let t = start;
+    for (const ch of chars) {
+      this.at(t, () => {
         shown += ch;
-        this.lastShown = shown;
         this.bus.emit("paced:text", { text: shown });
       }, gen);
-    });
-    this.at(start + chars.length / this.cps + 0.2, () => {
-      this.lastShown = "";
+      t += 1 / this.cps + (/[，。！？,.!?…]/.test(ch) ? 0.1 : 0);
+    }
+    this.at(t + 0.2, () => {
       this.bus.emit("paced:done", { text });
       this.bus.emit("engine:state", { value: "idle" });
     }, gen);
