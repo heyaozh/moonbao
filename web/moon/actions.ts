@@ -4,8 +4,7 @@
 
 import type { Action } from "../../shared/protocol";
 import type { ActionSource } from "../runtime/renderer";
-import type { EyeShape } from "./eyes";
-import type { MouthShape } from "./face";
+import type { ExprName } from "./expressions";
 import { deg, easeInOut, easeOut } from "./math";
 import { params } from "./params";
 
@@ -25,16 +24,14 @@ export interface Pose {
   /** 视线目标（-1..1） */
   gazeX: number;
   gazeY: number;
-  /** 眼睛形态强制（null = 交给眨眼系统） */
-  shape: EyeShape | null;
+  /** 表情强制（null = 由情绪决定）；脸画在球面上，见 expressions.ts */
+  expr: ExprName | null;
   /** 眼皮上限（dim 时半睁） */
   lidCap: number;
   /** 另一只眼的不透明度（特写） */
   secondEye: number;
   /** 本帧要触发一次压扁脉冲 */
   squashPulse: boolean;
-  /** 嘴形强制（null = 由情绪决定） */
-  mouth: MouthShape | null;
   /** 腮红加深量 0..1（null = 由情绪决定） */
   blush: number | null;
   done: boolean;
@@ -52,7 +49,7 @@ export interface ActionCtx {
 
 export const IDLE_POSE: Pose = {
   dx: 0, dy: 0, dz: 0, yaw: 0, pitch: 0, roll: 0, bodyYaw: 0,
-  glow: null, gazeX: 0, gazeY: 0, shape: null, lidCap: 1, secondEye: 1, squashPulse: false, mouth: null, blush: null, done: false,
+  glow: null, gazeX: 0, gazeY: 0, expr: null, lidCap: 1, secondEye: 1, squashPulse: false, blush: null, done: false,
 };
 
 type ActionFn = (t: number, k: number, ctx: ActionCtx, pose: Pose) => void;
@@ -88,8 +85,7 @@ const fns: Record<Action, ActionFn> = {
       p.dx = ctx.radius * a.closeupOffsetX * e.w;
       p.gazeX = -0.3 * e.w;
       p.secondEye = 1 - 0.7 * e.w;
-      p.shape = e.w > 0.9 ? "round" : null;
-      p.mouth = e.w > 0.5 ? "o" : null;
+      p.expr = e.w > 0.5 ? "surprised" : null;
       p.done = e.done;
       return;
     }
@@ -118,7 +114,7 @@ const fns: Record<Action, ActionFn> = {
     p.gazeX = a.gazeX * e.w;
     p.gazeY = -a.gazeY * e.w; // 参数里 -0.6 表示往上看
     p.dy = 0.03 * e.w;
-    p.mouth = e.w > 0.3 ? "flat" : null;
+    p.expr = e.w > 0.3 ? "thinking" : null;
     p.done = e.done;
   },
 
@@ -134,8 +130,7 @@ const fns: Record<Action, ActionFn> = {
     const u = (t - i * a.period) / a.period;
     const h = a.height * (0.6 + 0.4 * k) * (1 - i * 0.3);
     p.dy = h * Math.sin(Math.PI * u);
-    p.shape = k > 0.5 ? "squint" : null;
-    p.mouth = "smile";
+    p.expr = k > 0.5 ? "happy" : "smile";
     // 落地那一帧压扁
     p.squashPulse = u < 0.06 && i > 0;
   },
@@ -147,7 +142,7 @@ const fns: Record<Action, ActionFn> = {
     p.bodyYaw = p.yaw;
     p.dx = -0.06 * Math.sin(Math.PI * u);
     p.blush = 1; // 害羞地转过去
-    p.mouth = "flat";
+    p.expr = "shy";
     p.done = u >= 1;
   },
 
@@ -158,8 +153,7 @@ const fns: Record<Action, ActionFn> = {
     p.yaw = Math.PI * 2 * turns * easeInOut(u);
     p.bodyYaw = p.yaw;
     p.dy = 0.08 * Math.sin(Math.PI * u);
-    p.shape = "squint";
-    p.mouth = "smile";
+    p.expr = "laugh";
     p.done = u >= 1;
   },
 
@@ -171,15 +165,14 @@ const fns: Record<Action, ActionFn> = {
     const tOut = 0.5, tHide = 0.5 + 0.3 * k, tPeek = 0.5, tBack = 0.6;
     if (t < tOut) {
       p.dx = outX * easeOut(t / tOut);
-      p.shape = "dot";
-      p.mouth = "o";
+      p.expr = "surprised";
     } else if (t < tOut + tHide) {
       p.dx = outX;
     } else if (t < tOut + tHide + tPeek) {
       const u = (t - tOut - tHide) / tPeek;
       p.dx = outX + (peekX - outX) * easeOut(u);
       p.gazeX = -ctx.side * 0.8;
-      p.shape = "round";
+      p.expr = "pout";
     } else if (t < tOut + tHide + tPeek + a.hold) {
       p.dx = peekX;
       p.gazeX = -ctx.side * 0.8;
@@ -209,7 +202,7 @@ const fns: Record<Action, ActionFn> = {
     p.dy = -a.sink * e.w;
     p.lidCap = 1 - 0.45 * e.w;
     p.gazeY = -0.4 * e.w;
-    p.mouth = e.w > 0.3 ? "flat" : null;
+    p.expr = e.w > 0.3 ? "sad" : null;
     p.done = e.done;
   },
 
@@ -218,8 +211,7 @@ const fns: Record<Action, ActionFn> = {
     const e = envelope(t, 0.3, a.hold * (0.6 + 0.6 * k), 1.0);
     p.glow = 1 + (params.light.glowMax - 1) * e.w * (0.6 + 0.4 * k);
     p.dy = a.rise * e.w;
-    p.shape = e.w > 0.5 && k > 0.4 ? "squint" : null;
-    p.mouth = "smile";
+    p.expr = e.w > 0.5 && k > 0.4 ? "happy" : "smile";
     p.blush = 0.5 * e.w;
     p.done = e.done;
   },
@@ -234,8 +226,7 @@ const fns: Record<Action, ActionFn> = {
     const env = 1 - u;
     p.dx = a.amp * (0.6 + 0.4 * k) * Math.sin(2 * Math.PI * a.freq * t) * env;
     p.roll = deg(1.5) * Math.sin(2 * Math.PI * a.freq * 0.7 * t) * env;
-    p.shape = "dot";
-    p.mouth = "o";
+    p.expr = "pout";
   },
 };
 

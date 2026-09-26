@@ -14,3 +14,6 @@ persona/tests/last-report.json
 assets/moon/*/height_16bit.png
 assets/moon/*/albedo.png
 assets/moon/nasa/raw/*.tif
+
+# 真实星空原始素材（大文件，见 assets/sky/README.md 重下）
+assets/sky/raw/

@@ -1,46 +1,35 @@
-// 前端入口：角色运行时（总线 / 节拍器 / Tier 0 反射）+ 对话壳 + 调试面板。
-// 渲染层：three.js 月亮（MoonRenderer）。?brain=off 时不连服务端，只看月亮。
+// 前端入口：App（舞台 / 世界 / 月亮 / 运行时）+ 输入（倾斜）+ 调试面板 + 无头验收工具。
+// ?scene=<名字> 打开某个画面状态；?brain=off 不连服务端；?panel=off 收起面板。
 
 import { ACTIONS, type Action } from "../shared/protocol";
-import { SpeechAudio } from "./audio";
+import { App } from "./app/app";
+import { Panel } from "./app/panel";
+import { applyScene, SCENES } from "./app/scenes";
 import { CHARACTER_NAME } from "./config";
+import { EXPR_LABELS, EXPR_NAMES } from "./moon/expressions";
 import { params } from "./moon/params";
-import { MoonRenderer } from "./moon/renderer";
-import { Bus } from "./runtime/bus";
-import { installChat } from "./runtime/chat";
-import { EngineClient } from "./runtime/client";
-import { installPacer } from "./runtime/pacer";
-import { FanoutRenderer, StubRenderer } from "./runtime/renderer";
-import { installRuntime } from "./runtime/runtime";
 
 const q = new URLSearchParams(location.search);
 const BRAIN = q.get("brain") !== "off";
-if (!BRAIN) document.body.classList.add("nobrain");
-
 document.title = `Moonbao · ${CHARACTER_NAME}`;
-(document.getElementById("chatInput") as HTMLInputElement).placeholder = `跟${CHARACTER_NAME}说点什么……`;
 
-// ---------- 渲染层 ----------
-const moon = new MoonRenderer({
-  canvas: document.getElementById("moonCanvas") as HTMLCanvasElement,
-  stage: document.getElementById("stage")!,
-  vignette: document.getElementById("vignette")!,
-  glint: document.getElementById("glint")!,
-});
-const stub = new StubRenderer(document.getElementById("rlog"));
-const character = new FanoutRenderer([moon, stub]);
+const app = new App(document.getElementById("moonCanvas") as HTMLCanvasElement);
+applyScene(app, q.get("scene") ?? "real");
+if (q.has("hour")) app.world.hourOverride = Number(q.get("hour"));
+if (q.has("phase")) params.light.phaseDeg = Number(q.get("phase"));
+app.start();
 
 // ---------- 倾斜输入：鼠标（桌面模拟）/ 陀螺仪（真机） ----------
 addEventListener("pointermove", (e) => {
   if (e.pointerType !== "mouse") return;
-  moon.cam.setPointer((e.clientX / innerWidth) * 2 - 1, (e.clientY / innerHeight) * 2 - 1);
+  app.stage.cam.setPointer((e.clientX / innerWidth) * 2 - 1, (e.clientY / innerHeight) * 2 - 1);
 });
-const gyroBtn = document.getElementById("gyro") as HTMLButtonElement;
-const DOE = DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> };
+const gyroBtn = document.getElementById("gyroBtn") as HTMLButtonElement;
+const DOE = (window as any).DeviceOrientationEvent as { requestPermission?: () => Promise<string> } | undefined;
 function startGyro() {
-  addEventListener("deviceorientation", (e) => moon.cam.setOrientation(e.beta, e.gamma));
+  addEventListener("deviceorientation", (e) => app.stage.cam.setOrientation(e.beta, e.gamma));
 }
-if (matchMedia("(pointer: coarse)").matches && "DeviceOrientationEvent" in window) {
+if (matchMedia("(pointer: coarse)").matches && DOE) {
   if (typeof DOE.requestPermission === "function") {
     gyroBtn.hidden = false; // iOS：必须用户手势
     gyroBtn.onclick = async () => {
@@ -55,237 +44,201 @@ if (matchMedia("(pointer: coarse)").matches && "DeviceOrientationEvent" in windo
   }
 }
 
-// ---------- 角色运行时 ----------
-const bus = new Bus();
-installPacer(bus);
-installRuntime(bus, character);
-
-const audio = new SpeechAudio();
-addEventListener("pointerdown", () => void audio.resume(), { once: true });
-addEventListener("keydown", () => void audio.resume(), { once: true });
-
-const client = new EngineClient(bus, audio);
-const latencyEl = document.getElementById("latency")!;
-const lat: Record<string, number> = {};
-installChat(bus, client, {
-  onLatency: (kind, ms) => {
-    lat[kind] = ms;
-    latencyEl.textContent = `表情 ${fmtMs(lat.first_emotion)} · 文字 ${fmtMs(lat.first_text)} · 完成 ${fmtMs(lat.done)}`;
-  },
-});
-const panelSub = document.getElementById("panelSub")!;
-if (!BRAIN) {
-  panelSub.textContent = "只看月亮（?brain=off）";
-} else {
-  // 先探一下服务端在不在：不在就不开 WebSocket（避免 vite 每次重连都刷 ws proxy error），每 15s 再探
+// ---------- 大脑（服务端）：先探再连，避免没起服务端时刷错误 ----------
+if (BRAIN) {
   const probe = async () => {
     try {
       const r = await fetch("/api/health", { cache: "no-store" });
       if (r.ok) {
-        panelSub.textContent = "大脑已接通";
-        client.connect();
+        app.client.connect();
         return;
       }
     } catch {
       /* 服务端没起 */
     }
-    panelSub.textContent = "大脑未启动（npm run dev:server）· 只看月亮";
-    document.getElementById("status")!.textContent = "大脑未启动";
     setTimeout(probe, 15_000);
   };
   void probe();
 }
 
-function fmtMs(v?: number) {
-  return v == null ? "—" : v < 1000 ? `${Math.round(v)}ms` : `${(v / 1000).toFixed(1)}s`;
-}
-
-// ---------- 更新循环：永不静止 ----------
-// 不按 document.hidden 门控：真隐藏时浏览器自己会停 rAF（零成本）；而嵌入式浏览器面板（如 Claude 桌面 app）
-// 会把可见页面也报成 hidden，门控会让月亮冻住、点动作只抽一下。回到前台时 dt 有上限，不会跳帧。
-let last = performance.now();
-const fpsEl = document.getElementById("fps")!;
-let fpsTick = 0;
-document.addEventListener("visibilitychange", () => (last = performance.now()));
-function tick(now: number) {
-  const dt = Math.min(params.perf.maxFrameDt, (now - last) / 1000);
-  last = now;
-  character.update(dt);
-  if ((fpsTick += dt) > 0.5) {
-    fpsTick = 0;
-    fpsEl.textContent = `fps ${moon.fps.toFixed(0)} · 倾斜 ${moon.cam.tilt.x.toFixed(0)}°/${moon.cam.tilt.y.toFixed(0)}°`;
-  }
-  requestAnimationFrame(tick);
-}
-requestAnimationFrame(tick);
-
 // ---------- 调试面板 ----------
-const ACTION_LABELS: Record<Action, string> = {
-  idle_drift: "待机",
-  lean_in: "飘近",
-  think_tilt: "想想",
-  bounce: "弹一下",
-  roll: "转过去",
-  spin: "转一圈",
-  hide_edge: "躲边边",
-  nod: "点头",
-  dim: "变暗",
-  brighten: "亮起",
-  shiver: "发抖",
-  drift_away: "飘远",
-};
-const actionsEl = document.getElementById("actions")!;
-for (const name of ACTIONS) {
-  if (name === "idle_drift") continue;
-  const b = document.createElement("button");
-  b.textContent = ACTION_LABELS[name];
-  b.onclick = () => character.playAction(name, 0.7, "manual");
-  actionsEl.appendChild(b);
+const panel = new Panel();
+if (q.get("panel") === "off") panel.root.hidden = true;
+{
+  const s = panel.section("场景", true);
+  panel.buttons(
+    s,
+    Object.entries(SCENES).map(([k, v]) => [v.label, () => {
+      applyScene(app, k);
+      panel.refresh();
+      history.replaceState(null, "", `?scene=${k}`);
+    }]),
+    true
+  );
+  panel.slider(s, "钟点", -1, 24, 0.25, () => app.world.hourOverride ?? -1, (v) => {
+    app.world.hourOverride = v < 0 ? null : v;
+    app.world.sunAltOverride = null;
+  }, (v) => (v < 0 ? "实时" : `${Math.floor(v)}:${String(Math.round((v % 1) * 60)).padStart(2, "0")}`));
+  panel.slider(s, "太阳高度", -30, 60, 0.5, () => app.world.sunAltOverride ?? -99, (v) => (app.world.sunAltOverride = v), (v) => (v < -90 ? "实时" : `${v.toFixed(1)}°`));
+  panel.param(s, "月相°(-1实时)", "light.phaseDeg", -1, 359, 1);
+  panel.param(s, "亮边方向°", "light.limbDeg", -180, 180, 1);
+  panel.checkbox(s, "永远是夜晚", () => params.sky.alwaysNight, (v) => (params.sky.alwaysNight = v));
+  panel.checkbox(s, "星空左右镜像", () => params.sky.mirrorEastWest, (v) => (params.sky.mirrorEastWest = v));
 }
-(document.getElementById("closeup") as HTMLButtonElement).onclick = () => character.playAction("lean_in", 1, "manual");
-(document.getElementById("farAway") as HTMLButtonElement).onclick = () => character.playAction("drift_away", 1, "manual");
-
-const bindSlider = (id: string, fn: (v: number) => void, fmt: (v: number) => string = (v) => String(v)) => {
-  const el = document.getElementById(id) as HTMLInputElement;
-  const out = document.getElementById(id + "Out")!;
-  el.addEventListener("input", () => {
-    const v = Number(el.value);
-    out.textContent = fmt(v);
-    fn(v);
+{
+  const s = panel.section("表情");
+  panel.buttons(s, [["自动", () => (app.moon.exprOverride = null)], ...EXPR_NAMES.map((n) => [EXPR_LABELS[n], () => (app.moon.exprOverride = n)] as [string, () => void])], true);
+  const a = panel.section("动作");
+  panel.buttons(a, ACTIONS.filter((x) => x !== "idle_drift").map((n) => [n, () => app.moon.playAction(n as Action, 0.7, "manual")]));
+  panel.buttons(a, [["特写", () => app.moon.playAction("lean_in", 1, "manual")], ["飞远", () => app.moon.playAction("drift_away", 1, "manual")], ["聊天位", () => (app.moon.chatMode = !app.moon.chatMode)]]);
+  let v = 0.2;
+  let ar = 0.5;
+  panel.slider(a, "心情", -1, 1, 0.01, () => v, (x) => app.moon.setEmotion((v = x), ar));
+  panel.slider(a, "活力", 0, 1, 0.01, () => ar, (x) => app.moon.setEmotion(v, (ar = x)));
+}
+{
+  const s = panel.section("月亮");
+  panel.param(s, "半径", "moon.radius", 0.2, 1.2);
+  panel.param(s, "深度", "moon.home.depth", 0.4, 4);
+  panel.param(s, "高度", "moon.home.y", -1.5, 1.5);
+  panel.param(s, "亮度", "moon.brightness", 0.4, 2);
+  panel.param(s, "交界柔和", "moon.terminatorSoftness", 0.02, 0.6);
+  panel.param(s, "包裹光", "moon.wrap", 0, 0.8);
+  panel.param(s, "暖透光", "moon.sss", 0, 1.5);
+  panel.param(s, "边缘光", "moon.rim", 0, 1.5);
+  panel.param(s, "自发光", "moon.selfGlow", 0, 0.2);
+  panel.param(s, "贴图", "moon.surfaceRealism", 0, 1);
+  panel.param(s, "贴图对比", "moon.textureContrast", 0, 1.5);
+  panel.param(s, "凹凸", "moon.bumpStrength", 0, 1.2);
+  panel.param(s, "小坑", "moon.craterDetail", 0, 1.5);
+  panel.param(s, "体积感", "moon.volume", 0, 1);
+  panel.param(s, "边缘暗", "moon.limbDarkening", 0, 0.8);
+  panel.param(s, "光晕", "light.haloOpacity", 0, 1.5);
+  panel.param(s, "光晕大小", "light.haloScale", 1, 6);
+  panel.param(s, "地照下限", "light.earthshineMin", 0, 0.6);
+  panel.param(s, "地照上限", "light.earthshineMax", 0, 0.8);
+  panel.param(s, "脸经度", "moon.faceLon", -180, 180, 1);
+  panel.param(s, "脸纬度", "moon.faceLat", -60, 60, 1);
+}
+{
+  const s = panel.section("脸");
+  panel.param(s, "眼距", "face.eyeSpacing", 0.3, 0.9);
+  panel.param(s, "眼高", "face.eyeY", -0.3, 0.3);
+  panel.param(s, "眼宽", "face.eyeW", 0.02, 0.14);
+  panel.param(s, "眼高度", "face.eyeH", 0.02, 0.16);
+  panel.param(s, "高光", "face.highlight", 0, 1.5);
+  panel.param(s, "嘴下移", "face.mouthBelow", 0.08, 0.4);
+  panel.param(s, "嘴宽", "face.mouthWidth", 0.08, 0.4);
+  panel.param(s, "微笑深", "face.smileDepth", 0.01, 0.12);
+  panel.param(s, "腮红", "face.blushBase", 0, 1);
+  panel.param(s, "腮红大小", "face.blushRadius", 0.04, 0.2);
+}
+{
+  const s = panel.section("银河与星星");
+  panel.param(s, "银河亮度", "sky.milkyWay.gain", 0, 4);
+  panel.param(s, "黑位", "sky.milkyWay.black", 0, 0.2);
+  panel.param(s, "对比", "sky.milkyWay.contrast", 0.5, 3);
+  panel.param(s, "原色", "sky.milkyWay.saturation", 0, 1.5);
+  panel.param(s, "星云", "sky.milkyWay.nebula", 0, 2);
+  panel.param(s, "银河视差", "sky.milkyWay.parallax", 0, 1);
+  panel.param(s, "亮星大小", "sky.stars.sizeBright", 1, 16);
+  panel.param(s, "暗星大小", "sky.stars.sizeFaint", 0.3, 4);
+  panel.param(s, "亮星亮度", "sky.stars.brightBright", 0.5, 12);
+  panel.param(s, "暗星亮度", "sky.stars.brightFaint", 0, 1.5);
+  panel.param(s, "闪烁", "sky.stars.twinkle", 0, 1);
+  panel.param(s, "星表视差", "sky.stars.parallax", 0, 1);
+  params.sky.fill.forEach((_, i) => {
+    panel.param(s, `补星${i + 1}亮度`, `sky.fill.${i}.brightness`, 0, 3);
+    panel.param(s, `补星${i + 1}视差`, `sky.fill.${i}.parallax`, 0, 1);
   });
-};
-let sv = 0.2;
-let sa = 0.5;
-bindSlider("valence", (v) => character.setEmotion((sv = v), sa), (v) => v.toFixed(2));
-bindSlider("arousal", (v) => character.setEmotion(sv, (sa = v)), (v) => v.toFixed(2));
-bindSlider("phase", (v) => (params.light.phaseDeg = v), (v) => `${v}°`);
-bindSlider("hour", (v) => (moon.hourOverride = v < 0 ? null : v), (v) => (v < 0 ? "实时" : `${Math.floor(v)}:${String(Math.round((v % 1) * 60)).padStart(2, "0")}`));
-bindSlider("eyeH", (v) => (params.eyes.height = v), (v) => v.toFixed(2));
-bindSlider("eyeS", (v) => (params.eyes.spacing = v), (v) => v.toFixed(2));
-bindSlider("eyeZ", (v) => (params.eyes.size = v), (v) => v.toFixed(3));
-bindSlider("depth", (v) => (params.space.moonDepth = v), (v) => v.toFixed(2));
-bindSlider("shift", (v) => (params.space.shiftAt20deg = v), (v) => v.toFixed(2));
-bindSlider("sway", (v) => (params.space.moonSwayGain = v), (v) => v.toFixed(2));
-bindSlider("zeta", (v) => (params.motion.posZeta = params.motion.rotZeta = v), (v) => v.toFixed(2));
+}
+{
+  const s = panel.section("空间 · 光斑 · 流星 · 地照");
+  panel.param(s, "眼距屏幕", "space.eyeDistance", 1, 4);
+  panel.param(s, "倾斜横移", "space.shiftAt20deg", 0, 1.2);
+  panel.param(s, "视差强度", "space.parallaxStrength", 0, 1.5);
+  panel.param(s, "重量感", "motion.swayGain", 0, 0.6);
+  panel.param(s, "光斑亮", "bokeh.opacityMax", 0, 0.6);
+  panel.param(s, "流星间隔", "meteors.interval", 2, 40);
+  panel.param(s, "流星亮度", "meteors.brightness", 0.5, 8);
+  panel.param(s, "地照", "earthglow.strength", 0, 2);
+  panel.buttons(s, [["放一颗流星", () => app.world.meteors.spawn(app.stage.cam)], ["自动摇", () => (app.stage.cam.autoShake = !app.stage.cam.autoShake)]]);
+}
+{
+  const s = panel.section("后期");
+  panel.param(s, "曝光", "post.exposure", 0.3, 2.5);
+  panel.param(s, "辉光", "post.bloomStrength", 0, 2);
+  panel.param(s, "辉光半径", "post.bloomRadius", 0, 1);
+  panel.param(s, "辉光阈值", "post.bloomThreshold", 0, 2);
+  panel.param(s, "暗角", "post.vignette", 0, 1);
+  panel.param(s, "颗粒", "post.grain", 0, 0.06);
+}
+{
+  const s = panel.section("工具", true);
+  const status = document.createElement("div");
+  status.style.color = "#8e97b8";
+  panel.buttons(s, [
+    ["存为默认", async () => (status.textContent = await panel.saveDefaults())],
+    ["截图", async () => (status.textContent = await snapSave())],
+    ["对照页", () => open(`/compare.html?scene=${new URLSearchParams(location.search).get("scene") ?? "idle"}`, "_blank")],
+  ]);
+  s.appendChild(status);
+}
+const fpsEl = document.getElementById("fps")!;
+setInterval(() => {
+  const c = app.stage.cam;
+  const st = app.world.state;
+  fpsEl.textContent = `fps ${app.fps.toFixed(0)} · 倾斜 ${c.tilt.x.toFixed(0)}°/${c.tilt.y.toFixed(0)}° · 太阳 ${st.tone.sunAltDeg.toFixed(1)}° · 月相 ${(st.phase.illuminated * 100).toFixed(0)}% · ${app.world.location.label}`;
+}, 500);
 
-bindSlider("blush", (v) => (params.blush.opacityBase = v), (v) => v.toFixed(2));
-bindSlider("realism", (v) => (params.moon.surfaceRealism = v), (v) => v.toFixed(2));
-bindSlider("bump", (v) => (params.moon.bumpStrength = v), (v) => v.toFixed(2));
-bindSlider("selfGlow", (v) => (params.moon.selfGlow = v), (v) => v.toFixed(2));
-bindSlider("halo", (v) => (params.light.haloOpacity = v), (v) => v.toFixed(2));
-const mouthBtns: Array<[string, "smile" | "o" | "flat" | null]> = [["mouthAuto", null], ["mouthSmile", "smile"], ["mouthO", "o"], ["mouthFlat", "flat"]];
-for (const [id, shape] of mouthBtns) {
-  (document.getElementById(id) as HTMLButtonElement).onclick = () => {
-    moon.mouthOverride = shape;
-    for (const [id2] of mouthBtns) document.getElementById(id2)!.classList.toggle("on", id2 === id);
-  };
+// ---------- 无头验收工具 ----------
+async function snapSave(dir = "", name = `snap-${Date.now()}`): Promise<string> {
+  const dataUrl = app.stage.snapshot();
+  const r = await fetch(`/__snap?dir=${encodeURIComponent(dir)}&name=${encodeURIComponent(name)}`, { method: "POST", body: dataUrl });
+  return r.text();
 }
 
-const autoBtn = document.getElementById("autoShake") as HTMLButtonElement;
-autoBtn.onclick = () => {
-  moon.cam.autoShake = !moon.cam.autoShake;
-  autoBtn.classList.toggle("on", moon.cam.autoShake);
-};
-
-/** 10 秒演示序列（CHECKPOINT 0 的 GIF 用）：待机眨眼 → 飘近 → 弹 → 想想 → 转过去 → 亮起，全程自动摇镜头。
- *  时间轴（秒, 动作, 强度）；实时播放与逐帧录制共用同一张表。 */
-const DEMO: Array<[number, Action, number]> = [
-  [1.5, "lean_in", 0.6],
-  [3.2, "bounce", 0.8],
-  [4.6, "think_tilt", 0.7],
-  [6.6, "roll", 0.7],
-  [8.4, "brighten", 0.8],
-];
-const DEMO_SECONDS = 10.5;
-function runDemo() {
-  moon.cam.autoShake = true;
-  autoBtn.classList.add("on");
-  for (const [at, name, k] of DEMO) setTimeout(() => character.playAction(name, k, "manual"), at * 1000);
-  setTimeout(() => {
-    moon.cam.autoShake = false;
-    autoBtn.classList.remove("on");
-  }, DEMO_SECONDS * 1000);
-}
-(document.getElementById("demoSeq") as HTMLButtonElement).onclick = runDemo;
-
-/** 逐帧录制：固定时钟走 DEMO 表，每帧截图 POST 到 /__snap?dir=<seq>；然后 `python3 scripts/make-gif.py <seq>` 合成。
- *  默认竖屏 540×960、15fps、夜里 22 点。窗口隐藏时也能跑（不依赖 rAF）。 */
-async function recordGif(seq = "cp0", opts: { fps?: number; seconds?: number; w?: number; h?: number; hour?: number } = {}) {
+/** 逐帧录制：固定时钟，每帧截图 POST 到 /__snap?dir=<seq>；然后 `python3 scripts/make-gif.py <seq>` 合成。 */
+async function recordGif(seq = "clip", opts: { fps?: number; seconds?: number; w?: number; h?: number; shake?: boolean; script?: (t: number) => void } = {}) {
   const fps = opts.fps ?? 15;
-  const seconds = opts.seconds ?? DEMO_SECONDS;
-  const prevHour = moon.hourOverride;
-  moon.hourOverride = opts.hour ?? 22;
-  moon.setFixedSize({ w: opts.w ?? 540, h: opts.h ?? 960, pr: 1 });
-  moon.cam.autoShake = true;
+  const seconds = opts.seconds ?? 8;
+  app.stage.setFixedSize({ w: opts.w ?? 540, h: opts.h ?? 960, pr: 1 });
+  app.stage.cam.autoShake = opts.shake ?? true;
   const dt = 1 / fps;
-  let next = 0;
-  let t = 0;
   const n = Math.round(seconds * fps);
+  let t = 0;
   for (let i = 0; i < n; i++) {
-    while (next < DEMO.length && DEMO[next][0] <= t) {
-      character.playAction(DEMO[next][1], DEMO[next][2], "manual");
-      next++;
-    }
-    // 每帧内部按 60Hz 细分，弹簧更稳
+    opts.script?.(t);
     const sub = Math.max(1, Math.round(60 / fps));
-    for (let s = 0; s < sub; s++) character.update(dt / sub);
+    for (let k = 0; k < sub; k++) app.step(dt / sub);
     t += dt;
-    const dataUrl = moon.snapshot(0.9);
-    await fetch(`/__snap?dir=${encodeURIComponent(seq)}&name=frame-${String(i + 1).padStart(4, "0")}`, { method: "POST", body: dataUrl });
+    await snapSave(seq, `frame-${String(i + 1).padStart(4, "0")}`);
   }
-  moon.cam.autoShake = false;
-  moon.setFixedSize(null);
-  moon.hourOverride = prevHour;
+  app.stage.cam.autoShake = false;
+  app.stage.setFixedSize(null);
   return `snaps/${seq}/ ${n} 帧 → python3 scripts/make-gif.py ${seq}`;
 }
 
-async function snapSave(): Promise<string> {
-  const dataUrl = moon.snapshot();
-  const r = await fetch("/__snap", { method: "POST", body: dataUrl });
-  return r.text();
-}
-(document.getElementById("snap") as HTMLButtonElement).onclick = () => void snapSave().then((f) => console.log("snap →", f));
-
-(document.getElementById("proactive") as HTMLButtonElement).onclick = () =>
-  client.send({ type: "hello", force: true });
-(document.getElementById("resetChat") as HTMLButtonElement).onclick = () => client.send({ type: "reset" });
-
-const panel = document.getElementById("panel")!;
-(document.getElementById("panelToggle") as HTMLButtonElement).onclick = () =>
-  panel.classList.toggle("collapsed");
-if (q.get("panel") === "off") panel.classList.add("collapsed");
-
-// ---------- 开发调试入口 ----------
 declare global {
   interface Window {
-    __bus: Bus;
-    __client: EngineClient;
-    __moon: MoonRenderer;
+    __app: App;
     __params: typeof params;
-    __say: (text: string) => void;
+    __scene: (name: string) => void;
     __act: (name: Action, intensity?: number) => void;
     __step: (seconds?: number) => void;
-    __snapSave: () => Promise<string>;
-    __demo: () => void;
+    __snapSave: typeof snapSave;
     __recordGif: typeof recordGif;
     __tilt: (xDeg: number, yDeg: number) => void;
   }
 }
-window.__bus = bus;
-window.__client = client;
-window.__moon = moon;
+window.__app = app;
 window.__params = params;
-window.__say = (text) => {
-  bus.emit("user:send", { text });
-  client.send({ type: "text", text });
-};
-window.__act = (name, intensity = 0.7) => character.playAction(name, intensity, "manual");
-// 隐藏标签页里 rAF 不跑：手动把时钟往前拨（无头验收用）
+window.__scene = (name) => void applyScene(app, name);
+window.__act = (name, intensity = 0.7) => app.moon.playAction(name, intensity, "manual");
 window.__step = (seconds = 1) => {
   const n = Math.ceil(seconds * 60);
-  for (let i = 0; i < n; i++) character.update(1 / 60);
+  for (let i = 0; i < n; i++) app.step(1 / 60);
 };
 window.__snapSave = snapSave;
-window.__demo = runDemo;
 window.__recordGif = recordGif;
-window.__tilt = (x, y) => moon.cam.setTilt(x, y);
+window.__tilt = (x, y) => app.stage.cam.setTilt(x, y);

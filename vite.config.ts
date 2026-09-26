@@ -1,5 +1,6 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import basicSsl from "@vitejs/plugin-basic-ssl";
 import { defineConfig, type Plugin } from "vite";
 
 // 开发期截图落盘：页面 POST dataURL 到 /__snap，写进 snaps/（gitignore）。
@@ -21,6 +22,39 @@ function snapEndpoint(): Plugin {
           res.setHeader("content-type", "application/json");
           res.end(JSON.stringify({ ok: false, reason: "brain server not running (npm run dev:server)" }));
         }
+      });
+      // 概念图（画面对照标准）：assets/ui-concept/ 不在 vite root 里，这里单独开一个只读口子给对照页用
+      server.middlewares.use("/__concept", (req, res) => {
+        const name = decodeURIComponent((req.url ?? "/").split("?")[0]).replace(/^\/+/, "");
+        const file = path.join(process.cwd(), "assets/ui-concept", path.basename(name));
+        if (!/\.(jpg|txt)$/.test(file) || !existsSync(file)) {
+          res.statusCode = 404;
+          res.end();
+          return;
+        }
+        res.setHeader("content-type", file.endsWith(".jpg") ? "image/jpeg" : "text/plain; charset=utf-8");
+        res.end(readFileSync(file));
+      });
+      // 面板「存为默认」：把改过的参数写进 web/params.overrides.json（启动时合并进 params）
+      server.middlewares.use("/__params", (req, res) => {
+        if (req.method !== "POST") {
+          res.statusCode = 405;
+          res.end();
+          return;
+        }
+        let body = "";
+        req.on("data", (c) => (body += c));
+        req.on("end", () => {
+          try {
+            const json = JSON.parse(body);
+            const file = path.join(process.cwd(), "web/params.overrides.json");
+            writeFileSync(file, JSON.stringify(json, null, 2) + "\n");
+            res.end(file);
+          } catch (e) {
+            res.statusCode = 400;
+            res.end(String(e));
+          }
+        });
       });
       server.middlewares.use("/__snap", (req, res) => {
         if (req.method !== "POST") {
@@ -60,5 +94,14 @@ export default defineConfig({
       "/api": { target: "http://localhost:8787" },
     },
   },
-  plugins: [snapEndpoint()],
+  // 手机真机：MOON_HTTPS=1 时开自签 HTTPS（陀螺仪授权和麦克风都要安全上下文），配合 --host 走局域网
+  plugins: [snapEndpoint(), ...(process.env.MOON_HTTPS ? [basicSsl()] : [])],
+  build: {
+    rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, "web/index.html"),
+        compare: path.resolve(__dirname, "web/compare.html"),
+      },
+    },
+  },
 });

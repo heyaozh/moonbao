@@ -1,0 +1,14 @@
+Mode: built-in image_gen edit.
+
+Precise localized edit of the supplied moon dialogue mobile app concept. Change ONLY the user message bubble in the UPPER RIGHT and the narrow region of background immediately surrounding that bubble. Preserve everything else exactly: camera and phone, upper-left cute moon and its face, galaxy outside bubble vicinity, gold handwritten reply with all exact wording, meteors, foreground particles, bottom input and voice button.
+
+Change 1, crucial: REMOVE the existing lower-LEFT-pointing speech bubble tail entirely, leaving a smoothly rounded left edge. Add ONE small clear speech bubble tail on the RIGHT edge near its lower right corner, pointing outward to the RIGHT toward the screen's right edge. Keep the tail fully inside the display with a small margin. Tail must not point left toward the moon. Shift bubble slightly left only if needed for right-tail breathing room.
+
+Change 2: transform ordinary translucent blue bubble into an imaginative rounded-RECTANGULAR BLACK HOLE / gravitational lens in cosmic space, still recognizable as a readable user chat message. Deep nearly black midnight-blue interior, beautifully rounded rectangular contour. A physically evocative Einstein-ring-inspired lensing effect follows the rounded rectangular boundary, NOT a separate circular black hole. The distant galaxy and stars just outside the perimeter are visibly stretched, curved and optically warped around the four rounded corners and edges, forming narrow layered luminous arcs of blue-white, faint violet and traces of the galaxy's warm starlight. Show warped duplicate star arcs and bent galaxy filaments near the edge so it reads as actual background light deflection, not a generic neon outline. An elegant thin asymmetric luminous photon-ring-like band hugs the rounded rectangular boundary; a second weaker warped arc just outside it. The effect remains delicate and premium, not an orange fire ring, giant accretion disk or explosive portal. The right-facing small speech tail is integrated clearly into this perimeter. Retain the surrounding galaxy, with only local distortion.
+
+Keep text completely UNDISTORTED, fully readable on the dark interior, in the same crisp ice-blue rounded sans-serif with exact four lines:
+I'm a bit nervous
+because I would
+like to propose
+to my boyfriend.
+No extra labels or text. Lensing affects background light and perimeter only, never letters. Preserve message size and upper-right composition as closely as possible. User bubble remains cool blue, moon response warm gold. Single portrait refined UI concept.

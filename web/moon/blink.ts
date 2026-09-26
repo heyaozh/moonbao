@@ -1,11 +1,12 @@
 // 眨眼就是人格：间隔从指数分布抽（不是定时器），形态（普通 / 双眨 / 慢眨 / 眯眼 / 呆眼）由情绪偏置。
 // 输出两个量：openness（0..1，竖向缩放）和 shape（贴图形态）。动作原语可以临时强制形态。
 
-import type { EyeShape } from "./eyes";
 import { expRandom, lerp } from "./math";
 import { params } from "./params";
 
 type Phase = "open" | "closing" | "hold" | "opening";
+/** 眨眼系统自己的形态：普通 / 眯眼 ^ ^（心情好时眨完眼停一会儿） */
+export type EyeShape = "round" | "squint";
 
 export class Blinker {
   openness = 1;

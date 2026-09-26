@@ -1,0 +1,16 @@
+Mode: built-in image_gen edit. Retry succeeded; output: moonbao-long-message.png.
+
+Edit this moon mobile UI image into a matching long-message meteor handwriting concept. Preserve exactly the phone angle, camera, framing, upper-right warm realistically textured cute moon with two bean eyes, pink cheeks and little o mouth, looking down-left; preserve the gorgeous blue-white Milky Way, deep navy starfield, depth layers, nearest blurred particles and bottom chat input with microphone voice button.
+
+Replace the large "moonbao" lettering COMPLETELY with the following exact 30-word English sentence, with these SIX line breaks:
+When the world feels
+a little too loud, I will
+gather the quietest stars
+and write you a gentle reminder
+that you never have to shine
+alone tonight, my friend.
+
+Typography is the key requirement: smaller than previous lettering, highly readable delicate handwritten semi-connected italic script, open clear letterforms, restrained ascenders, no extravagant loops or swashes. Different font character from the previous highly cursive logo: like a warmly handwritten personal note with readable individually formed letters. Warm ivory luminous meteor trails, thin crisp bright cores and subtle fine stardust along strokes. Do NOT drown the letters in bloom or sparkles. Exact spelling, all 30 words clearly readable, no extra words, no missing lines, no quotation marks. All letters completed for legibility. 
+
+Place the entire six-line message in the middle-lower open space BELOW the moon and ABOVE the chat bar, occupying roughly screen height 43% to 76%. Keep ample horizontal margins inside the screen, no clipping, no overlap with moon or controls. Similar text size on all six lines, comfortable line spacing, loosely centered arrangement with tiny natural horizontal variations. A very slight overall upward tilt of 3 degrees creates floating spatial handwriting while staying easy to read. It should feel physically floating in the universe, not printed on a solid text panel. Darken only a subtle local patch of background behind the words if needed for contrast, preserving the galaxy elsewhere.
+A few graceful meteors fly in from different distant directions to meet the ends of the lines, implying that the upper-right moon is conducting them into this heartfelt sentence. Keep 3-4 thin purposeful curved trails around the text, never crossing or obscuring words. One tiny meteor finishing the final period. No hands or baton. Preserve visible galaxy around the lettering, realistic moon glow, layered depth inside the phone, and original bottom Chinese input text "想和月亮说些什么…" and "voice". One portrait polished app concept render.

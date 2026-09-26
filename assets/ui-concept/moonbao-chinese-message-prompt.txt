@@ -1,0 +1,17 @@
+Mode: built-in image_gen edit.
+
+Edit the supplied moon phone UI concept into a matching CHINESE meteor-written message. Preserve the exact phone, framing, camera angle, beautiful blue-white Milky Way, infinite navy starfield, soft foreground dust and bottom translucent chat input with voice button. Same premium cinematic depth and natural warm moon glow.
+
+Moon: on the RIGHT side in the upper half, fully visible inside screen, same size and realistic softly rounded cratered ivory surface and pink blush. Change expression and pose clearly: gently tilt its face UPWARD, as though lifting its head to laugh with delight at the stars above. Two happy softly curved squinting smiling eyes and a tiny open joyful smiling mouth. Face features rotate upward on the sphere to convey a visible lifted-head pose, rather than just rotating the whole image. Cute, tender and relaxed. No arms or accessories.
+
+Remove the entire English paragraph. Replace with ONLY the following exact Simplified Chinese text in SIX horizontal lines:
+当世界有些喧嚣，
+我会拾起最安静的星光，
+为你写下一句温柔的提醒：
+亲爱的朋友，
+今夜，你不必
+独自闪耀。
+
+Typography: elegant, legible handwritten Chinese, delicate relaxed 行楷 with fully formed readable characters, NOT wild cursive, NOT rigid typeset print. Small warm ivory-gold luminous strokes with crisp centers, tiny restrained meteor dust, low bloom. Exact characters and punctuation, no repetitions, no missing words, no English paragraph. The six lines fit ENTIRELY inside the central-lower screen below the moon and above the chat bar. Generous screen-edge margins, consistent character size, airy line spacing, gentle centered layout with slightly irregular floating line placement, very subtle overall upward tilt. The longest third line must be fully visible and comfortably readable; scale the whole text block accordingly. Keep all characters completed. Text should occupy middle-lower screen roughly 43%-76% height, and seem suspended in the universe rather than pasted on a card.
+
+Several thin graceful meteor trails arriving from different distant directions curve into the line ends, as if the moon has orchestrated the stars to write this message. Trails frame rather than cross the Chinese characters. One tiny meteor finishes final punctuation. Preserve background galaxy and softly defocused foreground particles, strong front-to-back spatial layers, no visible Earth. Keep original bottom UI text "想和月亮说些什么…" and microphone button labeled "voice". Single portrait polished concept render, no extra labels or panels.
