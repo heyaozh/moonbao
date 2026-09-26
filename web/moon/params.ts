@@ -43,10 +43,10 @@ export const params = {
     selfGlowMax: 0.2,
     selfGlowColor: "#fff1d6",
     /** 真实月面贴图混入程度（0 = 光面，1 = NASA 柔和贴图）。未决 11，CP0 拖着看。
-     *  贴图是 assets/moon/nasa_soft 缩到 2k 的副本（web/public/moon/，共 350 KB）；默认按 look-dev 选定的样子开 1。 */
+     *  贴图是用户偏好样板 assets/moon/nasa_face_softglow（NASA 柔和 0.5）缩出的副本（web/public/moon/，共约 570 KB；tools/blender/make_web_textures.py 生成）；默认按 look-dev 选定的样子开 1。 */
     surfaceRealism: 1,
-    albedoUrl: "/moon/nasa_soft_albedo_2k.jpg",
-    heightUrl: "/moon/nasa_soft_height_1k.png",
+    albedoUrl: "/moon/nasa_soft05_albedo_2k.jpg",
+    heightUrl: "/moon/nasa_soft05_height_1k.png",
     /** 高程转法线的凹凸强度（0 = 只有颜色没有起伏）；负值翻转坑的凹凸。 */
     bumpStrength: 0.12,
   },

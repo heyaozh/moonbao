@@ -1,6 +1,6 @@
 # assets/moon · 月面素材库
 
-look-dev 产物，2026-09-23 起。**不一定用**，留着以后也许有用。生成脚本：`tools/blender/moon_lookdev.py`。
+look-dev 产物，2026-09-23 起。**不一定用**，留着以后也许有用。生成脚本：`tools/blender/moon_lookdev.py`（渲染 + 全尺寸贴图）、`tools/blender/make_web_textures.py`（缩成网页副本）。
 
 | 目录 | 来源 | 风格 | 生成命令（在仓库根目录） |
 |---|---|---|---|
@@ -23,7 +23,7 @@ look-dev 产物，2026-09-23 起。**不一定用**，留着以后也许有用�
 - 豆眼参数（`--eye_y` 高度、`--eye_gap` 间距、`--eye_w/--eye_h` 大小）默认：高度球心下 0.10 R、间距 0.8 R（0.4 个月亮宽）、0.15 × 0.22 R。设定写的间距 0.5 个月亮宽试渲时已贴到边缘，所以默认收到 0.4。
 
 **保留的全尺寸 3D 素材（用户偏好，2026-09-26）**：只保留 `nasa_face_softglow/` 那一套——NASA 柔和 0.5 月面 + 参考图比例的脸 + 发光 1.0，也就是用户选定的样板。`albedo.png`（5 MB）与 `height_16bit.png`（15 MB）放在主检出 `~/Development/moonbao/assets/moon/nasa_face_softglow/`，被 `.gitignore` 排除、不在 GitHub 上。NASA 原始数据 `nasa/raw/*.tif`（16 MB）也保留在主检出，它是重生成任何 NASA 版本的源头。其它版本只留渲染图与 meta，需要时用上表命令一分钟重生成。
-注意：网页里实际加载的是 `web/public/moon/` 的 2k 副本，取自 `nasa_soft`（柔和 0.7），和偏好样板的 0.5 略有不同；要对齐就从 `nasa_face_softglow/albedo.png` 重新缩一份。
+网页里加载的 `web/public/moon/nasa_soft05_*` 就是从这一套缩出来的（2026-09-26 对齐；之前取自 `nasa_soft` 0.7）。重做命令：`Blender -b -P tools/blender/make_web_textures.py -- --src assets/moon/nasa_face_softglow --out web/public/moon --prefix nasa_soft05`。
 
 **参考图**：`reference/face_reference.jpg`，用户 2026-09-23 给的插画，脸的比例（眼距、嘴、腮红）按它量得，见 docs/design.md §2。
 
