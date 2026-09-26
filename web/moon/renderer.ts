@@ -159,13 +159,10 @@ export class MoonRenderer implements CharacterRenderer {
     this.swayY.step(dt);
 
     this.pos.tune(P.motion.posOmega, P.motion.posZeta);
-    this.pos.setTarget(
-      home.x + driftX + pose.dx + this.swayX.x + this.extra.pos.x,
-      home.y + driftY + pose.dy + this.swayY.x + this.extra.pos.y,
-      -home.depth + pose.dz + this.extra.pos.z
-    );
+    this.pos.setTarget(home.x + driftX + pose.dx + this.swayX.x, home.y + driftY + pose.dy + this.swayY.x, -home.depth + pose.dz);
     this.pos.step(dt);
-    this.body.root.position.set(this.pos.x, this.pos.y, this.pos.z);
+    // 手势 / 物理的位移直接叠加（不走弹簧：弹墙的反弹要干脆）
+    this.body.root.position.set(this.pos.x + this.extra.pos.x, this.pos.y + this.extra.pos.y, this.pos.z + this.extra.pos.z);
 
     // ---- 转身看你：脸（物体 +z）对准观察者的眼睛；偶尔扫一眼别处 ----
     this.glance.next -= dt;
@@ -209,8 +206,9 @@ export class MoonRenderer implements CharacterRenderer {
     const glowTarget = pose.glow ?? P.light.glowDefault * (this.listening ? 1.12 : 1);
     this.glow = approach(this.glow, glowTarget, P.light.glowTau, dt);
 
-    // ---- 表情：剧本 / 面板 > 动作 > 情绪 ----
-    const name: ExprName = this.exprOverride ?? pose.expr ?? exprForEmotion(this.cur.valence, arousal);
+    // ---- 表情：手势的瞬时表情 > 剧本 / 面板 > 动作 > 情绪 ----
+    if (this.flash && this.t > this.flash.until) this.flash = null;
+    const name: ExprName = this.flash?.name ?? this.exprOverride ?? pose.expr ?? exprForEmotion(this.cur.valence, arousal);
     const fp: FaceParams = exprParams(name);
     // 在听：视线稍微前倾、专注一点
     if (this.listening && !pose.expr && !this.exprOverride) fp.eyeScale *= 1.04;
@@ -246,6 +244,28 @@ export class MoonRenderer implements CharacterRenderer {
       illuminated: ctx.world.phase.illuminated,
     });
   }
+
+  /** 手势 / 小日子给的瞬时表情（秒），优先级最高。 */
+  flashExpr(name: ExprName, seconds: number) {
+    this.flash = { name, until: this.t + seconds };
+  }
+  private flash: { name: ExprName; until: number } | null = null;
+  /** 现在是不是在做瞬时表情 */
+  get flashing() {
+    return this.flash != null && this.t <= this.flash.until;
+  }
+  get time() {
+    return this.t;
+  }
+  /** 当前正在做的动作（小日子要避开） */
+  get busy() {
+    return this.actions.current != null;
+  }
+  /** 月心在「家 + 漂浮 + 动作」上的位置（不含手势位移） */
+  get springPos() {
+    return this.tmpS.set(this.pos.x, this.pos.y, this.pos.z);
+  }
+  private tmpS = new THREE.Vector3();
 
   /** 录制 / 切场景：直接把表情跳过去 */
   snapFace(name: ExprName) {

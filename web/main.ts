@@ -6,22 +6,41 @@ import { App } from "./app/app";
 import { Panel } from "./app/panel";
 import { applyScene, SCENES } from "./app/scenes";
 import { CHARACTER_NAME } from "./config";
+import { Behaviors } from "./moon/behaviors";
 import { EXPR_LABELS, EXPR_NAMES } from "./moon/expressions";
+import { MoonInteraction } from "./moon/interact";
 import { params } from "./moon/params";
 
 const q = new URLSearchParams(location.search);
 const BRAIN = q.get("brain") !== "off";
 document.title = `Moonbao · ${CHARACTER_NAME}`;
 
-const app = new App(document.getElementById("moonCanvas") as HTMLCanvasElement);
-applyScene(app, q.get("scene") ?? "real");
+const canvas = document.getElementById("moonCanvas") as HTMLCanvasElement;
+const app = new App(canvas);
+
+// ---------- 不聊天也好玩：手势 + 小日子 ----------
+const interact = new MoonInteraction(app.moon, app.stage.cam, canvas, {
+  onPoke: () => life.notifyActivity(),
+  onGrab: () => life.notifyActivity(),
+  onBounce: () => life.notifyActivity(),
+  onTapSky: () => life.notifyActivity(),
+});
+const life = new Behaviors(app.moon, app.world, app.stage.cam, interact, () => app.stage.pixelRatio);
+app.stage.back.add(life.star.points);
+app.onTick((dt) => {
+  interact.update(dt);
+  life.update(dt);
+});
+
+const sceneName = applyScene(app, q.get("scene") ?? "real");
+if (!q.has("scene") || sceneName === "real") life.playOpening();
 if (q.has("hour")) app.world.hourOverride = Number(q.get("hour"));
 if (q.has("phase")) params.light.phaseDeg = Number(q.get("phase"));
 app.start();
 
 // ---------- 倾斜输入：鼠标（桌面模拟）/ 陀螺仪（真机） ----------
 addEventListener("pointermove", (e) => {
-  if (e.pointerType !== "mouse") return;
+  if (e.pointerType !== "mouse" || interact.isGrabbed) return;
   app.stage.cam.setPointer((e.clientX / innerWidth) * 2 - 1, (e.clientY / innerHeight) * 2 - 1);
 });
 const gyroBtn = document.getElementById("gyroBtn") as HTMLButtonElement;
@@ -229,8 +248,12 @@ declare global {
     __snapSave: typeof snapSave;
     __recordGif: typeof recordGif;
     __tilt: (xDeg: number, yDeg: number) => void;
+    __interact: MoonInteraction;
+    __life: Behaviors;
   }
 }
+window.__interact = interact;
+window.__life = life;
 window.__app = app;
 window.__params = params;
 window.__scene = (name) => void applyScene(app, name);

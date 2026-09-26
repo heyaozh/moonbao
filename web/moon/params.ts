@@ -322,6 +322,8 @@ const defaults = {
 
   // ───────────── squash & stretch ─────────────
   squash: {
+    /** 被戳 / 撞墙时的压扁强度（弹簧位移到形变的倍数）。用户：不是特别软但是有弹性。 */
+    impact: 0.55,
     max: 0.07,
     velocityGain: 0.05,
     landPulse: 0.04,
