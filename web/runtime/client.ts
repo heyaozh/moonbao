@@ -93,6 +93,11 @@ export class EngineClient {
       case "error":
         this.bus.emit("engine:error", { message: ev.message });
         break;
+      case "reflex": {
+        const { type: _t, ...rest } = ev;
+        this.bus.emit("engine:reflex", rest);
+        break;
+      }
     }
   }
 }

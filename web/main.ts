@@ -125,6 +125,43 @@ app.bus.on("paced:done", ({ text }) => {
 });
 app.bus.on("engine:state", ({ value }) => chat.setThinking(value === "thinking"));
 app.bus.on("moon:hint", ({ length, text }) => chat.hint(length, text));
+// 快反应（Jev）：LLM 回话之前先做的表情与动作；难懂的问题冒 3D 问号，直到开始写字
+let sentAt = 0;
+const lat: Record<string, number[]> = { reflex: [], emotion: [], text: [], done: [] };
+const pushLat = (k: string, v: number) => {
+  lat[k].push(v);
+  if (lat[k].length > 10) lat[k].shift();
+};
+app.bus.on("user:send", () => (sentAt = performance.now()));
+app.bus.on("engine:reflex", (r) => {
+  if (sentAt) pushLat("reflex", performance.now() - sentAt);
+  app.moon.setEmotion(r.valence, r.arousal);
+  app.moon.flashExpr(r.expr as any, 2.4);
+  app.moon.playAction(r.action, r.intensity, "brain");
+  if (r.confused) chat.thinking.showQuestion(true);
+});
+let firstText = true;
+let gotEmotion = false;
+app.bus.on("engine:emotion", () => {
+  if (sentAt && !gotEmotion) {
+    pushLat("emotion", performance.now() - sentAt);
+    gotEmotion = true;
+  }
+});
+app.bus.on("engine:reply_delta", () => {
+  if (sentAt && firstText) {
+    pushLat("text", performance.now() - sentAt);
+    firstText = false;
+  }
+});
+app.bus.on("paced:text", () => chat.thinking.showQuestion(false));
+app.bus.on("engine:reply_done", () => {
+  if (sentAt) pushLat("done", performance.now() - sentAt);
+  sentAt = 0;
+  firstText = true;
+  gotEmotion = false;
+});
+const median = (a: number[]) => (a.length ? [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)] : NaN);
 app.bus.on("user:typing", () => life.notifyActivity());
 app.onTick((dt) => {
   sound.night = app.world.state.night;
@@ -349,7 +386,8 @@ const fpsEl = document.getElementById("fps")!;
 setInterval(() => {
   const c = app.stage.cam;
   const st = app.world.state;
-  fpsEl.textContent = `fps ${app.fps.toFixed(0)} · 倾斜 ${c.tilt.x.toFixed(0)}°/${c.tilt.y.toFixed(0)}° · 太阳 ${st.tone.sunAltDeg.toFixed(1)}° · 月相 ${(st.phase.illuminated * 100).toFixed(0)}% · ${app.world.location.label}`;
+  const ms = (v: number) => (Number.isFinite(v) ? `${Math.round(v)}` : "—");
+  fpsEl.textContent = `延迟 p50（ms）反应 ${ms(median(lat.reflex))} · 表情 ${ms(median(lat.emotion))} · 首字 ${ms(median(lat.text))} · 完 ${ms(median(lat.done))} ｜ fps ${app.fps.toFixed(0)} · 倾斜 ${c.tilt.x.toFixed(0)}°/${c.tilt.y.toFixed(0)}° · 太阳 ${st.tone.sunAltDeg.toFixed(1)}° · 月相 ${(st.phase.illuminated * 100).toFixed(0)}% · ${app.world.location.label}`;
 }, 500);
 
 // ---------- 无头验收工具 ----------

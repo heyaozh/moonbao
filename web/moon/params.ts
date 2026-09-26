@@ -364,9 +364,12 @@ const defaults = {
     /** 发光的模糊半径（画布像素） */
     glowPx: 9,
     /** 每个字大约多少个光点（按字的墨量自动增减） */
-    perChar: 48,
+    perChar: 30,
+    /** 光点飞行中的亮度（星尘 / 主角流星）。叠在一起会被辉光放大，宁低勿高。 */
+    dustBright: 0.32,
+    heroBright: 1.3,
     /** 光点的粗细（像素，1 倍屏）与尾巴长短（秒） */
-    particleSize: 1.35,
+    particleSize: 1.1,
     trail: 0.055,
     /** 日常：就近凝结；重要时刻（grand）：远方流星。飞行时长（秒）与字与字之间的间隔（秒）。 */
     dailyDur: 0.7,
@@ -374,7 +377,7 @@ const defaults = {
     dailyCharGap: 0.02,
     grandCharGap: 0.2,
     /** 从远处拖长尾飞来的「主角流星」占多少（其余是就近凝结的星尘） */
-    heroShare: 0.045,
+    heroShare: 0.03,
     /** 一个字里的光点按书写顺序先后到达的时间跨度（秒） */
     charSpread: 0.22,
     /** 颜色：字芯、发光、退到远处后的冷色、光点 */

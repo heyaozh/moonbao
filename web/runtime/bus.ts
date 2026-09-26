@@ -17,6 +17,8 @@ export interface BusEvents {
   "engine:proactive": { reason: "follow_up" | "return" };
   "engine:hello": { absentDays: number; voice: boolean };
   "engine:error": { message: string };
+  /** 快反应（Jev / 本地规则）：LLM 之前的表情与动作 */
+  "engine:reflex": { expr: string; action: Action; intensity: number; valence: number; arousal: number; confused: boolean; crisis: boolean; intent: string; emotion: string; source: string; ms: number };
   /** 经节拍器重新放出的协议流（渲染层与气泡消费这些，不直接消费 engine:*） */
   "paced:emotion": { valence: number; arousal: number };
   "paced:action": { name: Action; intensity: number };

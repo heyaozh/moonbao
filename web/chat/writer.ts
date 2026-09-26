@@ -13,7 +13,7 @@ const pVert = /* glsl */ `
   attribute vec3 iCtrl;
   attribute vec3 iTarget;
   attribute vec4 iTime;         // t0, dur, size, seed
-  uniform float uTime, uTrail, uPx, uOpacity, uSettle;
+  uniform float uTime, uTrail, uPx, uOpacity, uSettle, uDust, uHero;
   uniform vec2 uRes;
   varying float vAlong;
   varying float vSide;
@@ -45,7 +45,7 @@ const pVert = /* glsl */ `
     // 飞行中亮；落定后慢慢变成一粒轻轻闪的星尘
     float landed = clamp((uTime - t0 - dur) / uSettle, 0.0, 1.0);
     float twinkle = 0.75 + 0.25 * sin(uTime * (3.0 + seed * 5.0) + seed * 50.0);
-    vBright = mix(0.6 + hero * 1.8, 0.3 * twinkle, landed) * uOpacity;
+    vBright = mix(mix(uDust, uHero, hero), 0.26 * twinkle, landed) * uOpacity;
   }
 `;
 const pFrag = /* glsl */ `
@@ -94,6 +94,8 @@ export class StarParticles {
           uRes: { value: new THREE.Vector2(1, 1) },
           uOpacity: { value: 1 },
           uSettle: { value: 1.4 },
+          uDust: { value: 0.32 },
+          uHero: { value: 1.3 },
           uColor: { value: new THREE.Color(params.writer.particleColor) },
         },
         vertexShader: pVert,
@@ -137,13 +139,12 @@ export class StarParticles {
       if (this.owner[i * 2] === line && this.owner[i * 2 + 1] >= fromCi) {
         this.time[i * 4 + 3] = -1;
         this.owner[i * 2] = -1;
+        // 逐个登记上传范围：同一帧里后面还会 add() 登记范围，整段上传的标记会被它们盖掉
+        a.addUpdateRange(i * 4 + 3, 1);
         any = true;
       }
     }
-    if (any) {
-      a.clearUpdateRanges();
-      a.needsUpdate = true;
-    }
+    if (any) a.needsUpdate = true;
   }
 
   update(time: number, bufferW: number, bufferH: number, pixelRatio: number, opacity: number) {
@@ -153,6 +154,8 @@ export class StarParticles {
     u.uPx.value = pixelRatio;
     u.uOpacity.value = opacity;
     u.uTrail.value = params.writer.trail;
+    u.uDust.value = params.writer.dustBright;
+    u.uHero.value = params.writer.heroBright;
     (u.uColor.value as THREE.Color).set(params.writer.particleColor);
   }
 
