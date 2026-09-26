@@ -68,6 +68,8 @@ export class App {
     this.running = true;
     // 不按 document.hidden 门控：真隐藏时浏览器自己会停 rAF；嵌入式浏览器面板会把可见页面也报成 hidden
     document.addEventListener("visibilitychange", () => (this.last = performance.now()));
+    // 暂停时改尺寸会清空画布：补渲一帧（对照页的定格画面不会变黑）
+    addEventListener("resize", () => this.paused && requestAnimationFrame(() => this.stage.render(0)));
     const loop = (now: number) => {
       requestAnimationFrame(loop);
       if (this.paused) {

@@ -46,6 +46,7 @@ export class MoonInteraction {
   private spinAcc = 0;
   private spinWindow: { t: number; a: number }[] = [];
   private dizzyUntil = 0;
+  private dizzyPending = false;
   private holdRestoreAt = 0;
   private lookUntil = 0;
   private t = 0;
@@ -222,11 +223,16 @@ export class MoonInteraction {
       const dt = Math.max(0.016, (b.t - a.t) / 1000);
       v = b.p.clone().sub(a.p).divideScalar(dt);
     }
+    this.fling(v, this.grabLocal);
+  }
+
+  /** 甩出去：速度 v（世界单位/秒），grab = 抓的位置（相对球心，决定翻滚）。松手和演示剧本共用。 */
+  fling(v: THREE.Vector3, grab: THREE.Vector3 = new THREE.Vector3(0, this.moon.radius * 0.5, 0)) {
     const speed = v.length();
-    this.vel.copy(v.clampLength(0, 9));
+    this.vel.copy(v).clampLength(0, 9);
     // 偏心甩 → 翻滚：ω = r × v / R²（抓的位置越靠边转得越快）
     const R = this.moon.radius;
-    const r = this.grabLocal.clone().setZ(R * 0.6);
+    const r = grab.clone().setZ(R * 0.6);
     const w = new THREE.Vector3().crossVectors(r, this.vel).divideScalar(R * R);
     this.moon.rot.w.add(w.multiplyScalar(1.4));
     if (speed > 1.2) {
@@ -251,6 +257,13 @@ export class MoonInteraction {
     this.moon.lookTarget = this.onPlane(nx, ny, -3.5, this.moon.lookTarget ?? new THREE.Vector3());
     this.moon.lookWeight = 0.75;
     this.lookUntil = this.t + seconds;
+  }
+
+  /** 转圈圈（演示剧本用：转够了会晕） */
+  twirl(k = 1) {
+    this.moon.rot.w.add(new THREE.Vector3(0.8 * k, 15 * k, 1.5 * k));
+    this.moon.rot.hold = 0.04;
+    this.holdRestoreAt = this.t + 2.4;
   }
 
   shake(k: number) {
@@ -309,9 +322,12 @@ export class MoonInteraction {
     this.spinWindow.push({ t: this.t, a: wl * dt });
     while (this.spinWindow.length && this.t - this.spinWindow[0].t > 2) this.spinWindow.shift();
     this.spinAcc = this.spinWindow.reduce((s, x) => s + x.a, 0);
-    if (this.spinAcc > Math.PI * 3.2 && this.t > this.dizzyUntil) {
+    if (this.spinAcc > Math.PI * 3.2 && this.t > this.dizzyUntil) this.dizzyPending = true;
+    // 晕要等它慢下来、脸转回来再晕（转的时候脸在背面，晕了也看不见）
+    if (this.dizzyPending && wl < 2.5) {
+      this.dizzyPending = false;
       this.dizzyUntil = this.t + 3.5;
-      this.moon.flashExpr("dizzy", 2.4);
+      this.moon.flashExpr("dizzy", 2.6);
       this.ev.onDizzy?.();
     }
     if (this.lookUntil && this.t > this.lookUntil) {

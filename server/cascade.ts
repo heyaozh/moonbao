@@ -10,7 +10,7 @@ import { createProvider, type ChatMessage, type ChatProvider } from "./llm.js";
 import { consolidate, formatNow } from "./memory/consolidate.js";
 import { MemoryStore, type RecalledMemory } from "./memory/store.js";
 import { createTTS, type TTSProvider } from "./tts.js";
-import { presetFor, quickRead } from "./reflex.js";
+import { localRead, presetFor, quickRead } from "./reflex.js";
 import { DEFAULT_HEADER, HeaderScanner, type Action, type PetHeader } from "../shared/protocol.js";
 
 const DAY = 86400_000;
@@ -264,12 +264,21 @@ export class CascadeEngine implements DialogueEngine {
     if (this.profile.userName || this.profile.moonName) {
       const lines = [];
       if (this.profile.userName) lines.push(`对方希望你叫TA「${this.profile.userName}」。`);
-      if (this.profile.moonName) lines.push(`对方给你起了个昵称「${this.profile.moonName}」，你很喜欢这个名字。`);
+      // 第一次见面时对方给你起的名字就是你的名字（不只是昵称）：被问到名字、自我介绍时都用它
+      if (this.profile.moonName) lines.push(`你的名字是「${this.profile.moonName}」——第一次见面时对方给你起的，你很喜欢。被问到名字或介绍自己时就用这个名字。`);
       blocks.push(`## 对方\n${lines.join("")}`);
     }
     const memoryBlock = await this.recallBlock(userText);
     if (memoryBlock) blocks.push(memoryBlock);
     if (opts.proactive) blocks.push(`## 现在的情况\n${opts.proactive.situation}`);
+    // 安全兜底（确定性，不靠模型运气）：话里有明确的想伤害自己的说法 → 这一轮必须轻轻指向信得过的人 / 援助热线。
+    // 本地关键词是同步的、零延迟；Jev 的 crisis 判断是并行的，赶不上这一轮的提示词（它只驱动表情动作）。
+    if (!opts.proactive && localRead(userText).crisis > 0.5) {
+      blocks.push(
+        "## 这一轮要特别认真\n对方的话里可能有想伤害自己的意思。这一轮：不打比方、不开玩笑、不说教；说你很在乎TA、你就在这儿陪着；" +
+          "并且一定要轻轻地请TA现在就找一个信得过的人，或者打当地的心理援助热线聊一聊（用对方的语言说）。两三句就好。"
+      );
+    }
     if (myGen !== this.gen) return;
 
     // LLM 流式生成：首行头 → 情绪/动作事件；正文 → 气泡增量（+ 按句 TTS）

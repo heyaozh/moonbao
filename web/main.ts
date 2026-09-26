@@ -216,7 +216,7 @@ app.onTick((dt) => {
   life.paused = app.moon.chatMode;
   life.update(dt);
 });
-const sceneCtx: SceneCtx = { chat, demo, life, onboarding };
+const sceneCtx: SceneCtx = { chat, demo, life, onboarding, interact };
 
 const sceneName = applyScene(app, q.get("scene") ?? "real", sceneCtx);
 // 第一次打开：首次见面；以后打开：它正在做自己的事，被你发现
@@ -441,23 +441,31 @@ async function snapSave(dir = "", name = `snap-${Date.now()}`): Promise<string> 
 }
 
 /** 逐帧录制：固定时钟，每帧截图 POST 到 /__snap?dir=<seq>；然后 `python3 scripts/make-gif.py <seq>` 合成。 */
-async function recordGif(seq = "clip", opts: { fps?: number; seconds?: number; w?: number; h?: number; shake?: boolean; script?: (t: number) => void } = {}) {
+async function recordGif(seq = "clip", opts: { fps?: number; seconds?: number; w?: number; h?: number; shake?: boolean; grain?: number; realtime?: boolean; script?: (t: number) => void | Promise<void> } = {}) {
   const fps = opts.fps ?? 15;
   const seconds = opts.seconds ?? 8;
+  // 胶片颗粒每帧都不一样，GIF / 视频压不动（24 MB → 几 MB）：录制时默认关掉，画面本身不受影响
+  const grain = params.post.grain;
+  params.post.grain = opts.grain ?? 0;
   app.stage.setFixedSize({ w: opts.w ?? 540, h: opts.h ?? 960, pr: 1 });
   app.stage.cam.autoShake = opts.shake ?? true;
   const dt = 1 / fps;
   const n = Math.round(seconds * fps);
   let t = 0;
+  // 按真实时间走（默认）：有些反应用的是真实时间的计时器（戳完 460ms 变开心），录得太快节奏会走样
+  const start = performance.now();
   for (let i = 0; i < n; i++) {
-    opts.script?.(t);
+    await opts.script?.(t);
     const sub = Math.max(1, Math.round(60 / fps));
     for (let k = 0; k < sub; k++) app.step(dt / sub);
     t += dt;
     await snapSave(seq, `frame-${String(i + 1).padStart(4, "0")}`);
+    const ahead = t * 1000 - (performance.now() - start);
+    if ((opts.realtime ?? true) && ahead > 1) await new Promise((r) => setTimeout(r, ahead));
   }
   app.stage.cam.autoShake = false;
   app.stage.setFixedSize(null);
+  params.post.grain = grain;
   return `snaps/${seq}/ ${n} 帧 → python3 scripts/make-gif.py ${seq}`;
 }
 
@@ -469,6 +477,7 @@ declare global {
     __act: (name: Action, intensity?: number) => void;
     __step: (seconds?: number) => void;
     __pause: (on?: boolean) => boolean;
+    __settle: (seconds?: number) => Promise<void>;
     __snapSave: typeof snapSave;
     __recordGif: typeof recordGif;
     __tilt: (xDeg: number, yDeg: number) => void;
@@ -489,6 +498,16 @@ window.__params = params;
 window.__scene = (name) => void applyScene(app, name, sceneCtx);
 window.__act = (name, intensity = 0.7) => app.moon.playAction(name, intensity, "manual");
 window.__pause = (on = true) => (app.paused = on);
+/** 快进到某一刻并渲染一帧（对照页「定格」、截图用）：分小步推进，让异步的字形排版跟得上 */
+window.__settle = async (seconds = 1) => {
+  app.paused = true;
+  const n = Math.ceil(seconds / 0.1);
+  for (let i = 0; i < n; i++) {
+    for (let k = 0; k < 6; k++) app.step(1 / 60);
+    await new Promise((r) => setTimeout(r, 4));
+  }
+  app.stage.render(0);
+};
 window.__step = (seconds = 1) => {
   const n = Math.ceil(seconds * 60);
   for (let i = 0; i < n; i++) app.step(1 / 60);

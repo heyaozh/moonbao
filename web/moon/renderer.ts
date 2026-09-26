@@ -40,7 +40,8 @@ class QuatSpring {
       if (s > 1e-6) this.axis.set(this.tq.x / s, this.tq.y / s, this.tq.z / s);
       else this.axis.set(0, 0, 0);
       const k = this.omega * this.omega * this.hold;
-      const c = 2 * this.zeta * this.omega * (0.35 + 0.65 * this.hold);
+      // 放开（hold→0，被甩 / 转圈时）阻尼也跟着小：零重力里多转一会儿；hold = 1 时和原来一样
+      const c = 2 * this.zeta * this.omega * (0.08 + 0.92 * this.hold);
       this.w.addScaledVector(this.axis, k * ang * h).addScaledVector(this.w, -c * h);
       const wl = this.w.length();
       if (wl > 1e-7) {

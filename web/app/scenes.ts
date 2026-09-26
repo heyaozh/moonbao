@@ -1,10 +1,12 @@
 // 场景预设：?scene=<名字> 直接打开某个画面状态（验收、录 GIF、和概念图并排比较都用它）。
 // 对照表见 assets/ui-concept/README.md。对话类场景用演示大脑按剧本跑（App 时钟，__step 可快进）。
 
+import * as THREE from "three";
 import type { ChatView } from "../chat/chatview";
 import type { DemoBrain } from "../chat/demo";
 import { EXPR_NAMES, type ExprName } from "../moon/expressions";
 import type { Behaviors } from "../moon/behaviors";
+import type { MoonInteraction } from "../moon/interact";
 import { params } from "../moon/params";
 import type { Onboarding } from "../ui/onboarding";
 import type { App } from "./app";
@@ -14,6 +16,7 @@ export interface SceneCtx {
   demo: DemoBrain;
   life: Behaviors;
   onboarding?: Onboarding;
+  interact?: MoonInteraction;
 }
 
 export interface Scene {
@@ -111,6 +114,28 @@ export const SCENES: Record<string, Scene> = {
       };
       next();
       timers.push(setInterval(next, 1400));
+    },
+  },
+  play: {
+    label: "互动（戳 / 甩 / 转晕）",
+    settle: 5,
+    apply(app, x) {
+      base(app, x);
+      const it = x.interact;
+      if (!it) return;
+      // 不用真手指：按 App 时钟排好（录 GIF、快进都确定）
+      const at = (dx: number, dy: number) => {
+        const c = app.moon.center;
+        const r = app.moon.radius;
+        return new THREE.Vector3(c.x + dx * r, c.y + dy * r, c.z + r * 0.75);
+      };
+      const d = x.demo;
+      d.schedule(1.2, () => it.poke(at(0.42, 0.18)));
+      d.schedule(2.4, () => it.poke(at(-0.38, -0.12)));
+      d.schedule(3.8, () => it.fling(new THREE.Vector3(3.4, 1.2, -0.4), new THREE.Vector3(0.1, 0.55, 0)));
+      d.schedule(7.0, () => it.twirl(1));
+      d.schedule(7.5, () => it.twirl(0.8));
+      d.schedule(12.6, () => app.moon.flashExpr("laugh", 1.4));
     },
   },
   chat: {
@@ -223,10 +248,19 @@ export const SCENES: Record<string, Scene> = {
       base(app, x);
       params.light.phaseDeg = 0;
       x.life.paused = true;
-      script(x, [[0.2, () => {
-        x.chat.startVoice();
-        app.moon.flashExpr("focused", 60);
-      }]]);
+      const said = "I couldn't sleep again tonight.";
+      script(x, [
+        [0.2, () => {
+          x.chat.startVoice();
+          app.moon.flashExpr("focused", 60);
+        }],
+        // 说完：识别出的字凝结进黑洞，黑洞缩成刚好装下字的气泡，它回话
+        [5.2, () => {
+          x.chat.finishVoice(said);
+          app.moon.flashExpr("content", 0.4);
+          x.demo.reply(said, { text: "Then stay up with me a little. I'll dim the stars so they don't keep you awake.", v: 0.35, a: 0.3, act: "lean_in", i: 0.5, think: 1.1 });
+        }],
+      ]);
       let t = 0;
       timers.push(setInterval(() => {
         t += 0.05;
