@@ -1,249 +1,97 @@
-// MoonRenderer：three.js 版的 CharacterRenderer。
-// 只消费协议（情绪目标 / 动作意图 / 在听 / 在说），把它们变成：弹簧驱动的位置与转动、眨眼、光、月相。
-// 组成：窗相机（离轴投影）+ 夜空（远星 / 尘埃）+ 球（月相 shader）+ 光晕 + 两颗豆眼。
+// MoonRenderer：月亮这个角色的控制器，实现 CharacterRenderer（运行时只喂它 情绪 / 动作 / 在听 / 在说）。
+// 负责：情绪惯性 → 默认表情；动作原语 → 姿态目标；弹簧运动（位置 / 转身看你）；眨眼；压扁；光。
+// 画面由 MoonBody（moon.ts）画；物理与手势（V3）在 motion.ts 里接进来。
 
 import * as THREE from "three";
 import type { Action } from "../../shared/protocol";
 import type { ActionSource, CharacterRenderer } from "../runtime/renderer";
+import type { WindowCamera } from "../world/camera";
+import type { WorldState } from "../world/world";
 import { ActionRunner } from "./actions";
 import { Blinker } from "./blink";
-import { WindowCamera } from "./camera";
-import { Eyes } from "./eyes";
-import { Face, type MouthShape } from "./face";
+import { EXPRESSIONS, exprForEmotion, exprParams, FaceState, NEUTRAL, type ExprName, type FaceParams } from "./expressions";
 import { Spring, Spring3, approach, clamp, deg, drift } from "./math";
+import { MoonBody } from "./moon";
 import { params } from "./params";
-import { Sky, SkyBackdrop, skyColorsAt } from "./sky";
 
-const moonVert = /* glsl */ `
-  varying vec3 vN;
-  varying vec3 vWorld;
-  varying vec3 vObj;
-  varying vec2 vUv;
-  void main() {
-    vObj = position;
-    vUv = uv;
-    vN = normalize(mat3(modelMatrix) * normal);
-    vec4 w = modelMatrix * vec4(position, 1.0);
-    vWorld = w.xyz;
-    gl_Position = projectionMatrix * viewMatrix * w;
-  }
-`;
-const moonFrag = /* glsl */ `
-  uniform vec3 uSunDir;
-  uniform float uEarthshine;
-  uniform vec3 uLit;
-  uniform vec3 uShade;
-  uniform float uSoft;
-  uniform float uMottle;
-  uniform float uRim;
-  uniform vec3 uRimColor;
-  uniform float uGlow;
-  uniform sampler2D uAlbedo;
-  uniform sampler2D uHeight;
-  uniform float uRealism;   // 0 光面 … 1 真实贴图
-  uniform float uBump;      // 高程 → 法线扰动强度
-  uniform float uSelfGlow;  // 表面自发光（封顶 0.2）
-  uniform vec3 uSelfGlowColor;
-  varying vec3 vN;
-  varying vec3 vWorld;
-  varying vec3 vObj;
-  varying vec2 vUv;
+const Y = new THREE.Vector3(0, 1, 0);
+const Z = new THREE.Vector3(0, 0, 1);
 
-  float hash(vec3 p) {
-    p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3));
-    p *= 17.0;
-    return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
-  }
-  float vnoise(vec3 x) {
-    vec3 i = floor(x);
-    vec3 f = fract(x);
-    f = f * f * (3.0 - 2.0 * f);
-    return mix(
-      mix(mix(hash(i), hash(i + vec3(1,0,0)), f.x), mix(hash(i + vec3(0,1,0)), hash(i + vec3(1,1,0)), f.x), f.y),
-      mix(mix(hash(i + vec3(0,0,1)), hash(i + vec3(1,0,1)), f.x), mix(hash(i + vec3(0,1,1)), hash(i + vec3(1,1,1)), f.x), f.y),
-      f.z);
-  }
-  void main() {
-    vec3 N = normalize(vN);
-    // 高程贴图 → 法线扰动（只改光照，轮廓永远是圆）
-    if (uRealism > 0.001 && abs(uBump) > 0.001) {
-      vec2 e = vec2(1.0 / 1024.0, 1.0 / 512.0);
-      float h0 = texture2D(uHeight, vUv).r;
-      float dhu = texture2D(uHeight, vUv + vec2(e.x, 0.0)).r - h0;
-      float dhv = texture2D(uHeight, vUv + vec2(0.0, e.y)).r - h0;
-      vec3 T = normalize(cross(vec3(0.0, 1.0, 0.0), N));
-      vec3 B = cross(N, T);
-      N = normalize(N - uBump * uRealism * 40.0 * (dhu * T - dhv * B));
+/** 四元数弹簧：角速度 ω（世界坐标），力矩 = k·误差角 - c·ω。 */
+class QuatSpring {
+  q = new THREE.Quaternion();
+  w = new THREE.Vector3();
+  target = new THREE.Quaternion();
+  omega = 6;
+  zeta = 0.6;
+  /** 0..1：「自己想转回来」的力度（被甩得翻滚时暂时放松） */
+  hold = 1;
+  private tq = new THREE.Quaternion();
+  private axis = new THREE.Vector3();
+  step(dt: number) {
+    const n = Math.max(1, Math.ceil(dt * this.omega / 0.4));
+    const h = dt / n;
+    for (let i = 0; i < n; i++) {
+      // 误差：target · q⁻¹，取最短路径
+      this.tq.copy(this.target).multiply(this.tmpInv.copy(this.q).invert());
+      if (this.tq.w < 0) this.tq.set(-this.tq.x, -this.tq.y, -this.tq.z, -this.tq.w);
+      const s = Math.sqrt(Math.max(0, 1 - this.tq.w * this.tq.w));
+      const ang = 2 * Math.acos(clamp(this.tq.w, -1, 1));
+      if (s > 1e-6) this.axis.set(this.tq.x / s, this.tq.y / s, this.tq.z / s);
+      else this.axis.set(0, 0, 0);
+      const k = this.omega * this.omega * this.hold;
+      const c = 2 * this.zeta * this.omega * (0.35 + 0.65 * this.hold);
+      this.w.addScaledVector(this.axis, k * ang * h).addScaledVector(this.w, -c * h);
+      const wl = this.w.length();
+      if (wl > 1e-7) {
+        this.dq.setFromAxisAngle(this.tmpAxis.copy(this.w).divideScalar(wl), wl * h);
+        this.q.premultiply(this.dq).normalize();
+      }
     }
-    float d = dot(N, uSunDir);
-    float lit = smoothstep(-uSoft, uSoft, d);
-    float mot = (vnoise(vObj * 6.0) - 0.5) * uMottle + (vnoise(vObj * 15.0) - 0.5) * uMottle * 0.5;
-    vec3 tex = texture2D(uAlbedo, vUv).rgb;
-    // 贴图平均反照率 ≈ 0.55；归一化后乘暖白，保住设定里的月色
-    vec3 texN = clamp(tex / 0.55, 0.3, 1.6);
-    vec3 litCol = mix(uLit * (1.0 + mot), uLit * texN, uRealism);
-    vec3 col = mix(uShade * uEarthshine * mix(vec3(1.0), texN, uRealism * 0.6), litCol, lit);
-    col += uSelfGlowColor * uSelfGlow * uGlow;
-    vec3 V = normalize(cameraPosition - vWorld);
-    float rim = pow(1.0 - max(dot(N, V), 0.0), 3.0) * uRim * uGlow;
-    col += uRimColor * rim;
-    col *= mix(0.72, 1.0, clamp(uGlow, 0.0, 1.0)) + max(uGlow - 1.0, 0.0) * 0.3;
-    gl_FragColor = vec4(col, 1.0);
-    #include <tonemapping_fragment>
-    #include <colorspace_fragment>
   }
-`;
-
-function makeHaloTexture() {
-  const S = 256;
-  const c = document.createElement("canvas");
-  c.width = c.height = S;
-  const g = c.getContext("2d")!;
-  const grd = g.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
-  grd.addColorStop(0, "rgba(255,255,255,0.9)");
-  grd.addColorStop(0.3, "rgba(255,255,255,0.5)");
-  grd.addColorStop(0.6, "rgba(255,255,255,0.16)");
-  grd.addColorStop(1, "rgba(255,255,255,0)");
-  g.fillStyle = grd;
-  g.fillRect(0, 0, S, S);
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  return t;
+  private tmpInv = new THREE.Quaternion();
+  private dq = new THREE.Quaternion();
+  private tmpAxis = new THREE.Vector3();
 }
 
-export interface MoonRendererOptions {
-  canvas: HTMLCanvasElement;
-  /** 背景 / 暗角 / 玻璃反光的 DOM 元素（渲染层顺手更新它们的样式） */
-  stage?: HTMLElement;
-  vignette?: HTMLElement;
-  glint?: HTMLElement;
+export interface MoonCtx {
+  cam: WindowCamera;
+  world: WorldState;
 }
 
 export class MoonRenderer implements CharacterRenderer {
-  readonly gl: THREE.WebGLRenderer;
-  readonly scene = new THREE.Scene();
-  readonly cam = new WindowCamera();
-  readonly sky = new Sky();
-  readonly backdrop = new SkyBackdrop();
-  readonly eyes = new Eyes();
-  readonly face: Face;
-  /** 嘴形覆盖（调试面板用；null = 由情绪决定） */
-  mouthOverride: MouthShape | null = null;
-  private texReady = { albedo: false, height: false };
+  readonly body = new MoonBody();
   readonly actions = new ActionRunner();
   readonly blinker = new Blinker();
-  readonly moon: THREE.Mesh<THREE.SphereGeometry, THREE.ShaderMaterial>;
-  readonly body = new THREE.Group();
-  readonly halo: THREE.Sprite;
+  readonly face = new FaceState();
+  /** 面板 / 剧本强制的表情（null = 由情绪和动作决定） */
+  exprOverride: ExprName | null = null;
+  /** 聊天模式：月亮飘到 chatHome 给字让位 */
+  chatMode = false;
+  /** 额外的注视目标（世界坐标）：看流星、看黑洞气泡、看手指；null = 看你 */
+  lookTarget: THREE.Vector3 | null = null;
+  lookWeight = 0;
 
-  /** 钟点覆盖（调试用，null = 用真实时间） */
-  hourOverride: number | null = null;
-
-  // 情绪
   private target = { valence: 0.2, arousal: 0.5 };
   private cur = { valence: 0.2, arousal: 0.5 };
   private listening = false;
   private speaking = false;
   private glow = params.light.glowDefault;
-  private glowTarget = params.light.glowDefault;
-
-  // 运动
-  private pos = new Spring3(0, 0, -params.space.moonDepth, params.motion.posOmega, params.motion.posZeta);
-  private rot = new Spring3(0, 0, 0, params.motion.rotOmega, params.motion.rotZeta); // yaw, pitch, roll（脸）
-  private bodyYaw = new Spring(0, params.motion.rotOmega, params.motion.rotZeta);
+  readonly pos = new Spring3(0, 0, -1, params.motion.posOmega, params.motion.posZeta);
+  readonly rot = new QuatSpring();
   private squash = new Spring(0, params.motion.scaleOmega, params.motion.scaleZeta);
-  private swayX = new Spring(0, params.space.moonSwayOmega, params.space.moonSwayZeta);
-  private swayY = new Spring(0, params.space.moonSwayOmega, params.space.moonSwayZeta);
+  private swayX = new Spring(0, params.motion.swayOmega, params.motion.swayZeta);
+  private swayY = new Spring(0, params.motion.swayOmega, params.motion.swayZeta);
   private t = 0;
   private seed = Math.random() * 1000;
-  private lastRender = 0;
-  private w = 1;
-  private h = 1;
-  private sunDir = new THREE.Vector3();
-  private stats = { frames: 0, since: 0, fps: 0 };
-  private stage?: HTMLElement;
-  private vignetteEl?: HTMLElement;
-  private glintEl?: HTMLElement;
-  private lastHourKey = "";
+  private glance = { x: 0, y: 0, next: 2 };
+  private glanceS = new Spring3(0, 0, 0, 7, 0.75);
+  /** 外部（手势 / 物理，V3）叠加的位置偏移与压扁 */
+  readonly extra = { pos: new THREE.Vector3(), squashAxis: new THREE.Vector3(0, 1, 0), squash: 0 };
 
-  constructor(opts: MoonRendererOptions) {
-    this.stage = opts.stage;
-    this.vignetteEl = opts.vignette;
-    this.glintEl = opts.glint;
-    this.gl = new THREE.WebGLRenderer({ canvas: opts.canvas, antialias: true, alpha: true, powerPreference: "high-performance" });
-    this.gl.setClearColor(0x000000, 0);
-    this.gl.toneMapping = THREE.ACESFilmicToneMapping;
-    this.gl.toneMappingExposure = 1.0;
-
-    const geo = new THREE.SphereGeometry(1, 96, 64);
-    const mat = new THREE.ShaderMaterial({
-      vertexShader: moonVert,
-      fragmentShader: moonFrag,
-      uniforms: {
-        uSunDir: { value: new THREE.Vector3(0, 0, 1) },
-        uEarthshine: { value: 0.2 },
-        uLit: { value: new THREE.Color(params.moon.litColor) },
-        uShade: { value: new THREE.Color(params.moon.shadeColor) },
-        uSoft: { value: params.moon.terminatorSoftness },
-        uMottle: { value: params.moon.mottle },
-        uRim: { value: params.moon.rim },
-        uRimColor: { value: new THREE.Color(params.moon.rimColor) },
-        uGlow: { value: 1 },
-        uAlbedo: { value: null },
-        uHeight: { value: null },
-        uRealism: { value: 0 },
-        uBump: { value: params.moon.bumpStrength },
-        uSelfGlow: { value: params.moon.selfGlow },
-        uSelfGlowColor: { value: new THREE.Color(params.moon.selfGlowColor) },
-      },
-    });
-    // 真实月面贴图异步加载；没到之前 uRealism 压成 0（光面）
-    const loader = new THREE.TextureLoader();
-    loader.load(params.moon.albedoUrl, (t) => {
-      t.colorSpace = THREE.SRGBColorSpace;
-      t.wrapS = THREE.RepeatWrapping;
-      t.anisotropy = 4;
-      mat.uniforms.uAlbedo.value = t;
-      this.texReady.albedo = true;
-    });
-    loader.load(params.moon.heightUrl, (t) => {
-      t.wrapS = THREE.RepeatWrapping;
-      mat.uniforms.uHeight.value = t;
-      this.texReady.height = true;
-    });
-    this.moon = new THREE.Mesh(geo, mat);
-    this.moon.renderOrder = 1;
-    this.body.add(this.moon);
-    this.body.add(this.eyes.face);
-    this.face = new Face(this.eyes.face);
-
-    this.halo = new THREE.Sprite(
-      new THREE.SpriteMaterial({ map: makeHaloTexture(), color: new THREE.Color(params.light.haloColor), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })
-    );
-    this.halo.renderOrder = 0;
-
-    this.scene.add(this.backdrop.mesh, this.sky.group, this.halo, this.body);
-    this.resize();
-    addEventListener("resize", () => this.resize());
-  }
-
-  /** 录制用的固定尺寸（null = 跟随窗口） */
-  private fixedSize: { w: number; h: number; pr: number } | null = null;
-
-  resize() {
-    const w = this.fixedSize?.w ?? innerWidth;
-    const h = this.fixedSize?.h ?? innerHeight;
-    this.w = w;
-    this.h = h;
-    this.gl.setPixelRatio(this.fixedSize?.pr ?? Math.min(devicePixelRatio || 1, params.perf.maxPixelRatio));
-    this.gl.setSize(w, h, false);
-    this.cam.resize(w, h);
-  }
-
-  /** 录 GIF：把画布固定成某个尺寸（例如竖屏 540×960），传 null 恢复跟随窗口。 */
-  setFixedSize(size: { w: number; h: number; pr?: number } | null) {
-    this.fixedSize = size ? { w: size.w, h: size.h, pr: size.pr ?? 1 } : null;
-    this.resize();
+  constructor() {
+    const H = params.moon.home;
+    this.pos.set(H.x, H.y, -H.depth);
   }
 
   // ---------- CharacterRenderer ----------
@@ -252,7 +100,7 @@ export class MoonRenderer implements CharacterRenderer {
     this.target.arousal = clamp(arousal, 0, 1);
   }
   playAction(name: Action, intensity: number, source: ActionSource = "brain") {
-    if (!this.actions.play(name, intensity, source)) return; // 被更高优先级的动作挡住
+    if (!this.actions.play(name, intensity, source)) return;
     if (name === "bounce" || name === "spin") this.blinker.blinkNow(false);
     if (name === "shiver" || name === "hide_edge") this.blinker.blinkNow(true);
   }
@@ -262,17 +110,25 @@ export class MoonRenderer implements CharacterRenderer {
   setSpeaking(on: boolean) {
     this.speaking = on;
   }
-
-  get fps() {
-    return this.stats.fps;
+  update(_dt: number) {
+    /* 由 App 用 tick(dt, ctx) 驱动（需要相机与世界状态） */
   }
+
   get emotion() {
     return { ...this.cur };
   }
+  get radius() {
+    return params.moon.radius;
+  }
+  /** 月心世界坐标 */
+  get center() {
+    return this.body.root.position;
+  }
 
-  update(dt: number) {
+  tick(dt: number, ctx: MoonCtx) {
     const P = params;
     this.t += dt;
+    const cam = ctx.cam;
 
     // 情绪惯性
     const k = 1 - Math.exp(-dt / P.motion.emotionTau);
@@ -280,179 +136,162 @@ export class MoonRenderer implements CharacterRenderer {
     this.cur.arousal += (this.target.arousal - this.cur.arousal) * k;
     const arousal = clamp(this.cur.arousal + (this.speaking ? 0.1 : 0), 0, 1);
 
-    // 相机（倾斜 → 眼睛偏移 → 离轴投影）
-    this.cam.update(dt);
-
-    // 动作姿态
+    // 家：待机 / 聊天
+    const home = this.chatMode ? P.moon.chatHome : P.moon.home;
     const R = P.moon.radius;
-    const pose = this.actions.update(dt, {
-      halfW: this.cam.halfW,
-      radius: R,
-      moonDepth: P.space.moonDepth,
-      eyeDistance: P.space.eyeDistance,
-    });
+    const pose = this.actions.update(dt, { halfW: cam.halfW, radius: R, moonDepth: home.depth, eyeDistance: cam.eyeZ });
 
-    // 待机漂浮：Perlin，不是正弦；活力越高幅度越大、越快
+    // 待机漂浮（噪声，不是正弦）
     const ag = 1 + arousal * P.motion.driftArousalGain;
     const tt = (this.t / P.motion.driftPeriod) * ag;
     const driftX = drift(tt, this.seed) * P.motion.driftAmpX * ag;
     const driftY = drift(tt + 31.7, this.seed + 1) * P.motion.driftAmpY * ag;
     const driftRoll = drift(tt * 0.7 + 63.1, this.seed + 2) * deg(P.motion.driftRollDeg);
 
-    // 月亮「有重量」：相机横移时它慢半拍地跟一点
-    this.swayX.omega = this.swayY.omega = P.space.moonSwayOmega;
-    this.swayX.zeta = this.swayY.zeta = P.space.moonSwayZeta;
-    this.swayX.target = this.cam.eye.x * P.space.moonSwayGain;
-    this.swayY.target = this.cam.eye.y * P.space.moonSwayGain;
+    // 有重量：相机横移时慢半拍地跟一点
+    for (const s of [this.swayX, this.swayY]) {
+      s.omega = P.motion.swayOmega;
+      s.zeta = P.motion.swayZeta;
+    }
+    this.swayX.target = cam.eye.x * P.motion.swayGain;
+    this.swayY.target = cam.eye.y * P.motion.swayGain;
     this.swayX.step(dt);
     this.swayY.step(dt);
 
-    // 位置 / 转动弹簧
     this.pos.tune(P.motion.posOmega, P.motion.posZeta);
-    this.rot.tune(P.motion.rotOmega, P.motion.rotZeta);
-    this.pos.setTarget(driftX + pose.dx + this.swayX.x, driftY + pose.dy + this.swayY.x, -P.space.moonDepth + pose.dz);
-    this.rot.setTarget(pose.yaw, pose.pitch, pose.roll + driftRoll);
-    this.bodyYaw.target = pose.bodyYaw;
-    // roll / spin 转完整圈后，把弹簧的当前角减掉整圈数：否则目标回到 0 时它会倒着转回去一整圈
-    if (!this.actions.current) {
-      const TAU = Math.PI * 2;
-      for (const sp of [this.rot.s[0], this.bodyYaw]) {
-        const k = Math.round(sp.x / TAU);
-        if (k !== 0) sp.x -= k * TAU;
-      }
-    }
+    this.pos.setTarget(home.x + driftX + pose.dx + this.swayX.x, home.y + driftY + pose.dy + this.swayY.x, -home.depth + pose.dz);
     this.pos.step(dt);
-    this.rot.step(dt);
-    this.bodyYaw.step(dt);
+    // 手势 / 物理的位移直接叠加（不走弹簧：弹墙的反弹要干脆）
+    this.body.root.position.set(this.pos.x + this.extra.pos.x, this.pos.y + this.extra.pos.y, this.pos.z + this.extra.pos.z);
 
-    // squash & stretch：速度拉伸 + 落地脉冲
+    // ---- 转身看你：脸（物体 +z）对准观察者的眼睛；偶尔扫一眼别处 ----
+    this.glance.next -= dt;
+    if (this.glance.next <= 0) {
+      const g = deg(P.motion.glanceDeg);
+      const away = Math.random() < 0.35;
+      this.glance.x = away ? (Math.random() * 2 - 1) * g : 0;
+      this.glance.y = away ? (Math.random() * 2 - 1) * g * 0.6 : 0;
+      this.glance.next = away ? 0.6 + Math.random() * 0.8 : 2 + Math.random() * 4;
+    }
+    this.glanceS.setTarget(this.glance.x, this.glance.y, 0);
+    this.glanceS.step(dt);
+    const viewer = cam.camera.position;
+    const center = this.body.root.position;
+    const toViewer = this.tmpA.copy(viewer).sub(center).normalize();
+    if (this.lookTarget && this.lookWeight > 0) {
+      const toT = this.tmpB.copy(this.lookTarget).sub(center).normalize();
+      toViewer.lerp(toT, clamp(this.lookWeight, 0, 1)).normalize();
+    }
+    const qLook = lookRotation(toViewer, this.tmpQ);
+    const qPose = this.tmpQ2.setFromEuler(this.tmpE.set(-pose.pitch + this.glanceS.y, this.glanceS.x, pose.roll + driftRoll, "YXZ"));
+    this.rot.target.copy(qLook).multiply(qPose);
+    this.rot.omega = P.motion.rotOmega;
+    this.rot.zeta = P.motion.rotZeta;
+    this.rot.step(dt);
+    // 大角度的转（翻滚、转圈）由动作自己缓动，直接叠在最外层：脸会真的转到背面再转回来
+    const qYaw = this.tmpQ3.setFromAxisAngle(Y, pose.yaw);
+    this.body.mesh.quaternion.copy(this.rot.q).multiply(qYaw);
+
+    // ---- 压扁：速度拉伸 + 落地脉冲 + 外部（撞墙 / 被戳） ----
     this.squash.omega = P.motion.scaleOmega;
     this.squash.zeta = P.motion.scaleZeta;
     if (pose.squashPulse) this.squash.kick(-P.squash.landPulse * 40);
     this.squash.target = 0;
     this.squash.step(dt);
-    const vy = this.pos.vy;
-    const stretch = clamp(vy * P.squash.velocityGain + this.squash.x, -P.squash.max, P.squash.max);
-    this.body.position.set(this.pos.x, this.pos.y, this.pos.z);
-    this.body.scale.set(R * (1 - stretch * 0.5), R * (1 + stretch), R * (1 - stretch * 0.5));
-    this.moon.rotation.set(0, this.bodyYaw.x + this.t * 0.01, 0);
+    const stretch = clamp(this.pos.vy * P.squash.velocityGain + this.squash.x, -P.squash.max, P.squash.max);
+    if (Math.abs(this.extra.squash) > Math.abs(stretch)) this.body.setSquash(this.extra.squashAxis, this.extra.squash, R);
+    else this.body.setSquash(Y, -stretch, R);
 
-    // 光：动作给的 glow 目标，或回到默认；在听时稍亮
-    this.glowTarget = pose.glow ?? P.light.glowDefault * (this.listening ? 1.12 : 1);
-    this.glow = approach(this.glow, this.glowTarget, P.light.glowTau, dt);
+    // ---- 光 ----
+    const glowTarget = pose.glow ?? P.light.glowDefault * (this.listening ? 1.12 : 1);
+    this.glow = approach(this.glow, glowTarget, P.light.glowTau, dt);
 
-    // 月相：一盏方向光绕着转（世界空间，+z 朝观察者）
-    const phase = deg(P.light.phaseDeg);
-    const el = deg(P.light.sunElevationDeg);
-    this.sunDir.set(Math.sin(phase) * Math.cos(el), Math.sin(el), Math.cos(phase) * Math.cos(el)).normalize();
-    const u = this.moon.material.uniforms;
-    u.uSunDir.value.copy(this.sunDir);
-    // 地照在新月附近最强：随 (1 - cos phase) 插值
-    const es = (1 - Math.cos(phase)) / 2;
-    u.uEarthshine.value = P.light.earthshineMin + (P.light.earthshineMax - P.light.earthshineMin) * es;
-    u.uSoft.value = P.moon.terminatorSoftness;
-    u.uMottle.value = P.moon.mottle;
-    u.uRim.value = P.moon.rim;
-    u.uGlow.value = this.glow;
-    u.uRealism.value = this.texReady.albedo ? P.moon.surfaceRealism : 0;
-    u.uBump.value = this.texReady.height ? P.moon.bumpStrength : 0;
-    u.uSelfGlow.value = Math.min(P.moon.selfGlow, P.moon.selfGlowMax);
-    (u.uSelfGlowColor.value as THREE.Color).set(P.moon.selfGlowColor);
-    (u.uLit.value as THREE.Color).set(P.moon.litColor);
-    (u.uShade.value as THREE.Color).set(P.moon.shadeColor);
-    (u.uRimColor.value as THREE.Color).set(P.moon.rimColor);
-
-    // 眼睛：眨眼 + 形态 + 暗部程度（眼睛朝向相机，所以用「朝相机方向」和太阳方向的夹角）
+    // ---- 表情：手势的瞬时表情 > 剧本 / 面板 > 动作 > 情绪 ----
+    if (this.flash && this.t > this.flash.until) this.flash = null;
+    const name: ExprName = this.flash?.name ?? this.exprOverride ?? pose.expr ?? exprForEmotion(this.cur.valence, arousal);
+    const fp: FaceParams = exprParams(name);
+    // 在听：视线稍微前倾、专注一点
+    if (this.listening && !pose.expr && !this.exprOverride) fp.eyeScale *= 1.04;
+    fp.gazeX += pose.gazeX;
+    fp.gazeY -= pose.gazeY;
+    this.face.setTarget(fp);
+    const face = this.face.update(dt);
+    // 眨眼：只作用在「睁着的圆眼」上；^ ^ / >< / @ 不眨
     this.blinker.lidCap = pose.lidCap;
     this.blinker.update(dt, this.cur.valence, arousal);
-    if (pose.shape) this.blinker.force(pose.shape, 0.05);
-    this.eyes.openness = this.blinker.openness;
-    this.eyes.setShape(this.blinker.openness < 0.12 ? "closed" : this.blinker.shape);
-    this.eyes.setDaze(this.blinker.daze);
-    this.eyes.gazeX.target = pose.gazeX;
-    this.eyes.gazeY.target = pose.gazeY;
-    this.eyes.setSecondEyeOpacity(pose.secondEye);
-    const toCam = new THREE.Vector3().copy(this.cam.camera.position).sub(this.body.position).normalize();
-    const eyeLit = THREE.MathUtils.smoothstep(toCam.dot(this.sunDir), -0.3, 0.3);
-    // 眼睛在 body 里，body 有缩放：把半径按 1（body.scale 已经是 R）传；lookAt 要世界坐标，先把矩阵刷新
-    this.body.updateMatrixWorld(true);
-    this.eyes.update(dt, 1, 1 - eyeLit, this.cam.camera.position, {
-      yaw: this.rot.x,
-      pitch: this.rot.y,
-      roll: this.rot.z,
+    const blinkable = 1 - clamp(face.happy + face.squeeze + face.dizzy, 0, 1);
+    const open = 1 - (1 - this.blinker.openness) * blinkable;
+    const daze = this.blinker.daze;
+    const squint = this.blinker.shape === "squint" && name !== "sad" ? 1 : 0;
+    const out: FaceParams = {
+      ...face,
+      openL: face.openL * open,
+      openR: face.openR * open,
+      happy: Math.max(face.happy, squint * 0.9),
+      eyeScale: face.eyeScale * daze,
+    };
+    const blush = clamp(face.blush + Math.max(0, this.cur.valence) * 0.3 + (pose.blush ?? 0), 0, 1);
+
+    this.body.update({
+      sunDir: ctx.world.sunDir,
+      earthshine: ctx.world.earthshine,
+      glow: this.glow,
+      face: out,
+      blush,
+      time: this.t,
+      night: ctx.world.night,
+      radius: R,
+      illuminated: ctx.world.phase.illuminated,
     });
-
-    // 嘴：动作给的优先，否则面板覆盖，否则由情绪决定（心情好 → 微笑；活力高且心情中性 → o；难过 → 平）
-    const v = this.cur.valence;
-    const mouth: MouthShape =
-      pose.mouth ?? this.mouthOverride ?? (v > 0.25 ? "smile" : arousal > 0.6 && Math.abs(v) < 0.35 ? "o" : v < -0.3 ? "flat" : "smile");
-    this.face.setShape(mouth);
-    this.face.smileAmount = clamp(0.35 + 0.65 * v, 0.2, 1);
-    // 腮红：底值 + 开心加深 + 动作（害羞）加深
-    const B = P.blush;
-    const blushT = clamp(B.opacityBase + (B.opacityMax - B.opacityBase) * Math.max(clamp(v, 0, 1) * 0.5, pose.blush ?? 0), 0, 1);
-    this.face.update(dt, this.eyes.eyeY, blushT, 1 - eyeLit);
-
-    // 光晕：跟着月亮，在它后面一点
-    const night = this.updateBackground();
-    // 和月心同一深度：球的前半面挡住光晕中心，倾斜时光晕不会和月亮错位
-    this.halo.position.copy(this.body.position);
-    const hs = P.light.haloScale * R * 2 * (0.9 + 0.1 * this.glow);
-    this.halo.scale.set(hs, hs, 1);
-    (this.halo.material as THREE.SpriteMaterial).opacity = P.light.haloOpacity * this.glow * (0.35 + 0.65 * night);
-    ((this.halo.material as THREE.SpriteMaterial).color as THREE.Color).set(P.light.haloColor);
-
-    // 夜空
-    const shortPx = Math.min(this.w, this.h) * this.gl.getPixelRatio();
-    this.sky.update(dt, shortPx / 2, P.sky.dayStarVisibility + (1 - P.sky.dayStarVisibility) * night, this.cam.eye);
-
-    // 渲染（帧率上限）
-    const isTouch = matchMedia("(pointer: coarse)").matches;
-    const interval = 1000 / (isTouch ? P.perf.fpsMobile : P.perf.fpsDesktop);
-    const now = performance.now();
-    if (now - this.lastRender >= interval - 1) {
-      this.lastRender = now;
-      this.renderNow();
-      this.stats.frames++;
-    }
-    this.stats.since += dt;
-    if (this.stats.since >= 1) {
-      this.stats.fps = this.stats.frames / this.stats.since;
-      this.stats.frames = 0;
-      this.stats.since = 0;
-    }
   }
 
-  renderNow() {
-    this.gl.render(this.scene, this.cam.camera);
+  /** 手势 / 小日子给的瞬时表情（秒），优先级最高。 */
+  flashExpr(name: ExprName, seconds: number) {
+    this.flash = { name, until: this.t + seconds };
+  }
+  private flash: { name: ExprName; until: number } | null = null;
+  /** 现在是不是在做瞬时表情 */
+  get flashing() {
+    return this.flash != null && this.t <= this.flash.until;
+  }
+  get time() {
+    return this.t;
+  }
+  /** 当前正在做的动作（小日子要避开） */
+  get busy() {
+    return this.actions.current != null;
+  }
+  /** 月心在「家 + 漂浮 + 动作」上的位置（不含手势位移） */
+  get springPos() {
+    return this.tmpS.set(this.pos.x, this.pos.y, this.pos.z);
+  }
+  private tmpS = new THREE.Vector3();
+
+  /** 录制 / 切场景：直接把表情跳过去 */
+  snapFace(name: ExprName) {
+    this.face.snap(exprParams(name));
   }
 
-  /** 占位背景 + 暗角 + 玻璃反光（都是 DOM/CSS，几乎零成本）。返回「夜的程度」。 */
-  private updateBackground(): number {
-    const hour = this.hourOverride ?? new Date().getHours() + new Date().getMinutes() / 60;
-    const c = skyColorsAt(hour);
-    const key = `${c.top}${c.mid}${c.bottom}`;
-    this.backdrop.set(c.top, c.mid, c.bottom, this.h * this.gl.getPixelRatio());
-    if (this.stage && key !== this.lastHourKey) {
-      this.lastHourKey = key;
-      this.stage.style.background = `linear-gradient(180deg, ${c.top} 0%, ${c.mid} 55%, ${c.bottom} 100%)`;
-    }
-    if (this.vignetteEl) {
-      this.vignetteEl.style.opacity = String(params.sky.vignette);
-    }
-    if (this.glintEl) {
-      // 反光随倾斜滑动：眼睛往右，反光往左（像玻璃上的窗外灯）
-      const gx = -this.cam.eye.x * 40;
-      const gy = this.cam.eye.y * 40;
-      this.glintEl.style.opacity = String(params.sky.glassGlint);
-      this.glintEl.style.transform = `translate3d(${gx.toFixed(1)}%, ${gy.toFixed(1)}%, 0)`;
-    }
-    return c.night;
-  }
-
-  /** 截图：渲染一帧然后取 dataURL（无头验收管线用）。 */
-  snapshot(quality = 0.85): string {
-    this.renderNow();
-    return this.gl.domElement.toDataURL("image/jpeg", quality);
-  }
+  private tmpA = new THREE.Vector3();
+  private tmpB = new THREE.Vector3();
+  private tmpQ = new THREE.Quaternion();
+  private tmpQ2 = new THREE.Quaternion();
+  private tmpQ3 = new THREE.Quaternion();
+  private tmpE = new THREE.Euler();
 }
+
+const _m = new THREE.Matrix4();
+const _x = new THREE.Vector3();
+const _y = new THREE.Vector3();
+/** 让物体 +z 指向 dir、+y 尽量朝上的旋转。 */
+export function lookRotation(dir: THREE.Vector3, out: THREE.Quaternion) {
+  const z = dir;
+  _x.copy(Y).cross(z);
+  if (_x.lengthSq() < 1e-8) _x.set(1, 0, 0);
+  _x.normalize();
+  _y.copy(z).cross(_x).normalize();
+  _m.makeBasis(_x, _y, z);
+  return out.setFromRotationMatrix(_m);
+}
+
+export { EXPRESSIONS, NEUTRAL, Z };

@@ -22,6 +22,11 @@ export interface ChatProvider {
   ): AsyncGenerator<string>;
 }
 
+/** Haiku 4.5 / Sonnet 4.5 及更早的模型不接受 output_config.effort。 */
+function supportsEffort(model: string) {
+  return !/haiku-4-5|sonnet-4-5|claude-3/.test(model);
+}
+
 export class ClaudeProvider implements ChatProvider {
   name = "claude";
   private client = new Anthropic();
@@ -40,7 +45,8 @@ export class ClaudeProvider implements ChatProvider {
         model: this.model,
         max_tokens: 400,
         system: blocks,
-        output_config: { effort: "low" },
+        // effort 只有较新的模型支持；Haiku 4.5 / Sonnet 4.5 收到会 400（2026-09-26 查明）
+        ...(supportsEffort(this.model) ? { output_config: { effort: "low" as const } } : {}),
         messages,
       },
       { signal }
@@ -88,5 +94,5 @@ export function createProvider(): ChatProvider {
   if (which === "openai") {
     return new OpenAIProvider(process.env.OPENAI_MODEL ?? "gpt-4o");
   }
-  return new ClaudeProvider(process.env.CLAUDE_MODEL ?? "claude-opus-5");
+  return new ClaudeProvider(process.env.CLAUDE_MODEL ?? "claude-haiku-4-5");
 }

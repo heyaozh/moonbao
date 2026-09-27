@@ -1,0 +1,20 @@
+Mode: built-in image_gen, reference-based generation.
+
+Use case: ui-mockup. Create a portrait mobile app concept based on the reference's beautiful galaxy, warm realistic cute moon, blue gravitational-lensing user bubbles and gold star-written moon responses. Same phone frame and slight camera angle. This is a CHAT HISTORY IN THREE-DIMENSIONAL SPACE, NOT an ordinary vertically stacked chat feed. Exactly THREE user messages and THREE moon replies must all be visible, six messages total, with no duplicate or additional text. Each pair occupies its own depth distance. Old conversations drift away into infinity, shrink, fade, and shift sideways/vertically; new conversations form from stars close to the glass. Text faces viewer on near-parallel planes, only very slight perspective, no dramatic Star Wars tilted text plane. Show perceptual depth through scale, atmospheric fade, parallax, stars BETWEEN message planes and subtle local occlusion of particles, rather than merely placing same-size rows above one another. Keep all six texts readable including distant pair, use high-resolution crisp letterforms. No arrows, diagrams, lane lines, depth labels or explanatory text.
+
+Exact dialogue from OLDEST to NEWEST:
+Old user: "Long day."
+Old moon: "Rest here a moment."
+Middle user: "I tried my best, but nothing seemed to go right."
+Middle moon: "Even quiet stars are still shining."
+New user: "Will you stay with me?"
+New moon: "Of course. We can watch the stars together."
+Keep exact wording and all six messages; wrap long messages into readable short lines.
+
+User messages: crisp ice-blue rounded sans-serif in dark rounded-rectangle black-hole bubbles, RIGHT-facing small tail, thin delicate local lensing distorts background stars at perimeter, not neon thick borders. Moon responses: elegant readable warm gold handwritten meteor light, no bubble, floating directly in space. Distance reduces bubble/rim and text brightness consistently; distant text not blurred into illegibility. Nearest reply has a few fine incoming shooting stars joining its final strokes.
+
+Moon on LEFT around upper-middle or middle-left, modest size about 28%-32% interior screen width so six messages fit. NORMAL completely smooth ROUND spherical moon, NO squeezing/deformation. Change lighting: most of its sphere is darkened, illuminated portion forms a warm delicate CRESCENT along its left/lower-left rim. A curved soft gradual terminator blends bright crescent into shadow. Preserve entire circular silhouette faintly visible with subtle earthshine, realistic tiny craters and soft rounded volume. NOT a cutout crescent shape. Two cute bean eyes, tiny smile, faint pink cheeks subtly readable on dim face, looking toward conversation. Warm comforting calm expression.
+
+Keep beautiful blue-white Milky Way infinitely far behind, interleaved star layers, small distant stars, intermediate fine dust, a few near soft bokeh motes. Bottom front-glass chat input "想和月亮说些什么…" and right microphone "voice" stay fixed and readable. No visible Earth. Portrait single image, not collage. Never overlap text with moon, screen edge or input. Generous legibility and calm cinematic composition.
+
+VARIANT 2: More pronounced diagonal recession toward upper RIGHT. Oldest pair sits small in upper-right distance, middle pair displaced toward upper-left/center but clear of left-side moon, newest pair lower-center/right much nearer. Three depth scales roughly 60%, 78%, 100%, different star occlusion and foreground bokeh emphasize depth. Space the six messages non-uniformly with natural sideways offsets. Preserve readability.
