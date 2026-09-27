@@ -76,6 +76,18 @@ export class ChatView {
   startExchange(userText: string | null, opts: { grand?: boolean; voice?: boolean } = {}): Exchange {
     const now = this.t;
     this.lastChatAt = now;
+    // 上一轮它还没说完（你抢话了）：那句收尾留在原来那一轮里，后面流进来的字不会串到新的一轮
+    const cur = this.ex[0];
+    if (cur && cur.text && !cur.moonDone) {
+      cur.moonDone = true;
+      let full = (cur.text.hintText ?? cur.text.fullText).trimEnd();
+      // 被打断的半句：退回上一个词边界，加省略号（「Rest here a mome」→「Rest here a…」）
+      if (!cur.text.hintText && full && !/[.!?。！？…~～]$/.test(full)) {
+        const cut = /[\u3400-\u9fff]$/.test(full) ? full : full.replace(/\s+\S*$/, "");
+        full = (cut || full).replace(/[\s,，、;；:：]+$/, "") + "…";
+      }
+      if (full) void cur.text.setText(full, true, now).then(() => this.layout(cur));
+    }
     // 旧的往后退一格
     for (const e of this.ex) e.index += 1;
     const e = new Exchange();
@@ -111,7 +123,8 @@ export class ChatView {
       },
       style
     );
-    e.text.grand = !!opts.grand || userText == null;
+    // 隆重档（远方流星）只给明确要求的；它主动开口的短句在 moonSay 里按预告长度决定
+    e.text.grand = !!opts.grand;
     e.text.onGlyph = () => this.onGlyph?.();
     e.text.group.rotation.z = THREE.MathUtils.degToRad(W.tiltDeg);
     e.group.add(e.text.group);
@@ -179,6 +192,8 @@ export class ChatView {
     if (this.pendingHint != null && !e.text.fullText) {
       e.text.hintLength = this.pendingHint.length;
       e.text.hintText = this.pendingHint.text ?? null;
+      // 它主动说的短句（≤ 20 字）走隆重档：远方流星、写得大
+      if (!e.bubble && this.pendingHint.length <= 20) e.text.grand = true;
       this.pendingHint = null;
     }
     if (done) e.moonDone = true;
@@ -263,7 +278,8 @@ export class ChatView {
       const z = -params.writer.depth - C.stepDepth * Math.max(k, -0.3);
       const sk = (cam.eyeZ - z) / cam.eyeZ;
       const x = (0.2 * THREE.MathUtils.clamp(k, 0, 2.5) + C.swayX * Math.sin(k * 1.3) * 0.5) * cam.halfW;
-      const y = (e.top + e.lift + stackAt(k)) * sk;
+      const base = this.ex[0] ? this.ex[0].top + this.ex[0].lift : e.top;
+      const y = (base + stackAt(k)) * sk;
       e.group.position.set(x, y, z);
       let op = Math.max(0, 1 - C.fadePerStep * Math.max(0, k));
       if (k < 0) op *= Math.max(0, 1 + k * 2.2); // 拉到玻璃前面的淡出

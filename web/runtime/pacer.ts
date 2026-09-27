@@ -32,6 +32,9 @@ export function installPacer(bus: Bus, opts: PacerOptions = {}) {
   let holdUntil = 0; // 停顿到什么时候
   let acc = 0; // 字数累加器（小数）
   let lastT = performance.now();
+  // 你抢话之后，旧回复还在路上的事件作废，直到新一轮开始（服务端回显你的话）或超时
+  let discardUntil = 0;
+  const discarding = () => performance.now() < discardUntil;
   // 用 setTimeout 而不是 rAF：后台/隐藏标签页里 rAF 会完全停掉，回到前台时话才继续说；
   // setTimeout 在后台只是降频，dt 放宽到 1s 让它能追上进度。
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -117,17 +120,23 @@ export function installPacer(bus: Bus, opts: PacerOptions = {}) {
     schedule();
   };
 
-  bus.on("engine:emotion", (e) => push({ kind: "emotion", ...e }));
-  bus.on("engine:action", (a) => push({ kind: "action", ...a }));
-  bus.on("engine:reply_delta", ({ text }) => push({ kind: "text", text }));
-  bus.on("engine:reply_done", ({ text }) => push({ kind: "done", text }));
-  // 新一轮开始/主动开口/出错：上一轮残留立刻放完并清零
+  bus.on("engine:emotion", (e) => !discarding() && push({ kind: "emotion", ...e }));
+  bus.on("engine:action", (a) => !discarding() && push({ kind: "action", ...a }));
+  bus.on("engine:reply_delta", ({ text }) => !discarding() && push({ kind: "text", text }));
+  bus.on("engine:reply_done", ({ text }) => !discarding() && push({ kind: "done", text }));
+  // 你抢话：上一轮剩下的不再放（已经写出来的由 ChatView 收尾在上一轮里，不会串进新的一轮）
+  bus.on("user:barge", () => {
+    reset();
+    discardUntil = performance.now() + 2500;
+  });
+  // 新一轮开始：清零（不放残留——放出来会写进你刚发的那一轮）
   bus.on("engine:transcript", ({ role }) => {
     if (role === "user") {
-      flushAll();
+      discardUntil = 0;
       reset();
     }
   });
+  // 主动开口 / 出错：上一轮残留立刻放完并清零
   bus.on("engine:proactive", () => {
     flushAll();
     reset();

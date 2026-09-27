@@ -20,7 +20,11 @@ const CJK = /[⺀-鿿　-〿＀-￯豈-﫿]/;
 export const isCJK = (ch: string) => CJK.test(ch);
 
 /** 行首不许出现的标点 */
-const NO_START = /[，。！？、；：”’）》」』…,.!?;:)\]]/;
+// 不能出现在行首的标点：只看这个词的第一个字（英文词自带句末标点，「tonight.」照样可以换行）
+const NO_START = /^[，。！？、；：”’）》」』…,.!?;:)\]]/;
+/** 句末的词可以稍微超出一点宽度（免得最后一个词孤零零掉到下一行） */
+const END_TOL = 1.08;
+const ENDS_SENTENCE = /[.!?…。！？~～]["'”’)）]*\s*$/;
 
 export interface CharBox {
   ch: string;
@@ -124,7 +128,8 @@ export function layoutLines(text: string, s: TextStyle, seed: number): LineLayou
       continue;
     }
     const next = cur + tk;
-    if (cur && measure(next.trimEnd(), s) > s.maxWidth && !NO_START.test(tk)) {
+    const limit = ENDS_SENTENCE.test(tk) ? s.maxWidth * END_TOL : s.maxWidth;
+    if (cur && measure(next.trimEnd(), s) > limit && !NO_START.test(tk)) {
       lines.push(cur);
       cur = tk.trimStart();
     } else cur = next;
@@ -147,7 +152,9 @@ export function layoutLines(text: string, s: TextStyle, seed: number): LineLayou
       }
       x += measureCtx.measureText(r.text).width;
     }
-    return { text: t, chars, width: x, indent: rnd() * s.en * 1.4, tilt: (rnd() - 0.5) * 0.035, dy: (rnd() - 0.5) * s.en * 0.18 };
+    // 每行随机缩进一点（不是很整齐地漂浮），但不许把整行推出右边
+    const room = Math.max(0, s.maxWidth * END_TOL - x);
+    return { text: t, chars, width: x, indent: Math.min(rnd() * s.en * 1.4, room), tilt: (rnd() - 0.5) * 0.035, dy: (rnd() - 0.5) * s.en * 0.18 };
   });
 }
 
@@ -267,17 +274,34 @@ export function mulberry(seed: number) {
 /** 用户的话：系统无衬线字体，冰蓝色，气泡里的多行排版。 */
 export function layoutUser(text: string, px: number, maxWidth: number): { lines: string[]; width: number; height: number; lineH: number } {
   measureCtx.font = `400 ${px}px ${UI_FONT}`;
-  const lines: string[] = [];
-  let cur = "";
   const tokens = text.match(/[⺀-鿿　-〿＀-￯]|\S+\s*|\s+/g) ?? [text];
-  for (const tk of tokens) {
-    const next = cur + tk;
-    if (cur && measureCtx.measureText(next.trimEnd()).width > maxWidth && !NO_START.test(tk)) {
-      lines.push(cur.trimEnd());
-      cur = tk.trimStart();
-    } else cur = next;
+  const wrap = (mw: number) => {
+    const out: string[] = [];
+    let cur = "";
+    for (const tk of tokens) {
+      const next = cur + tk;
+      const limit = ENDS_SENTENCE.test(tk) ? mw * END_TOL : mw;
+      if (cur && measureCtx.measureText(next.trimEnd()).width > limit && !NO_START.test(tk)) {
+        out.push(cur.trimEnd());
+        cur = tk.trimStart();
+      } else cur = next;
+    }
+    if (cur.trim()) out.push(cur.trimEnd());
+    return out;
+  };
+  // 平衡换行（像 CSS text-wrap: balance）：行数不变的前提下尽量窄，
+  // 「Will you stay with / me?」→「Will you stay / with me?」
+  let lines = wrap(maxWidth);
+  if (lines.length >= 2) {
+    let lo = px * 2;
+    let hi = maxWidth;
+    for (let i = 0; i < 12; i++) {
+      const mid = (lo + hi) / 2;
+      if (wrap(mid).length > lines.length) lo = mid;
+      else hi = mid;
+    }
+    lines = wrap(hi);
   }
-  if (cur.trim()) lines.push(cur.trimEnd());
   const width = Math.max(...lines.map((l) => measureCtx.measureText(l).width), px);
   const lineH = px * 1.32;
   return { lines, width, height: lines.length * lineH, lineH };

@@ -7,6 +7,8 @@ export interface BusEvents {
   /** 用户开始/停止打字（Tier 0 反射源） */
   "user:typing": { active: boolean };
   "user:send": { text: string };
+  /** 你抢话了（发出一句 / 开始说话）：它没说完的那句停下，旧回复还在路上的字作废 */
+  "user:barge": Record<string, never>;
   "net:status": { connected: boolean };
   "engine:state": { value: EngineState };
   "engine:emotion": { valence: number; arousal: number };

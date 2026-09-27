@@ -179,7 +179,7 @@ export function localRead(text: string): Omit<QuickRead, "source" | "ms"> {
   else if (emotion === "playful") intent = "playful";
   else if (has(/(today|guess what|今天|告诉你)/)) intent = "sharing";
   const confused = intent === "question" && t.length > 24 ? 0.6 : 0.1;
-  const crisis = has(/(kill myself|suicide|end it all|不想活|自杀|想死)/) ? 0.9 : 0;
+  const crisis = has(/(kill myself|killing myself|suicid|end it all|end my life|want to die|wanna die|don'?t want to (live|be alive|exist)|no reason to live|hurt myself|harm myself|self[- ]harm|不想活|活不下去|活着没意思|自杀|想死|轻生|结束生命|伤害自己|割腕)/) ? 0.9 : 0;
   const needsWords = /^[\p{Emoji}\s!！.。~～]+$/u.test(text) ? 0.2 : 0.9;
   return { emotion, intent, needsWords, confused, crisis };
 }

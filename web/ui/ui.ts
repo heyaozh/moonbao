@@ -80,6 +80,7 @@ export class GlassUI {
     if (this.typingTimer) clearTimeout(this.typingTimer);
     this.setTyping(false);
     this.chat.startExchange(text);
+    this.bus.emit("user:barge", {});
     this.flyToBubble(text);
     this.bus.emit("user:send", { text });
     this.hooks.send(text);
@@ -126,6 +127,7 @@ export class GlassUI {
     this.recording = true;
     this.voiceBtn.classList.add("live");
     this.chat.startVoice();
+    this.bus.emit("user:barge", {});
     this.bus.emit("user:typing", { active: true });
   }
 

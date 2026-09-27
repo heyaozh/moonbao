@@ -116,6 +116,10 @@ export class Stage {
   private t = 0;
   /** 录制用的固定尺寸（null = 跟随窗口） */
   private fixedSize: { w: number; h: number; pr: number } | null = null;
+  /** 画质档（见 params.perf.adaptive） */
+  quality = 0;
+  private prCap: number = params.perf.maxPixelRatio;
+  private bloomScale = 1;
 
   constructor(canvas: HTMLCanvasElement) {
     this.gl = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: "high-performance", preserveDrawingBuffer: false });
@@ -128,6 +132,9 @@ export class Stage {
     this.composer.addPass(new LayerPass(this));
     this.composer.addPass(new ShaderPass(SanitizeShader));
     this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.6, 0.5, 0.7);
+    // 辉光的模糊链可以用更低的分辨率（合成时是采样纹理，和屏幕分辨率无关）
+    const bloomSetSize = this.bloom.setSize.bind(this.bloom);
+    this.bloom.setSize = (w: number, h: number) => bloomSetSize(Math.max(8, Math.round(w * this.bloomScale)), Math.max(8, Math.round(h * this.bloomScale)));
     this.composer.addPass(this.bloom);
     this.final = new ShaderPass(FinalShader);
     this.final.material.toneMapped = false;
@@ -141,7 +148,7 @@ export class Stage {
     const h = this.fixedSize?.h ?? innerHeight;
     this.width = w;
     this.height = h;
-    this.pixelRatio = this.fixedSize?.pr ?? Math.min(devicePixelRatio || 1, params.perf.maxPixelRatio);
+    this.pixelRatio = this.fixedSize?.pr ?? Math.min(devicePixelRatio || 1, params.perf.maxPixelRatio, this.prCap);
     this.gl.setPixelRatio(this.pixelRatio);
     this.gl.setSize(w, h, false);
     this.composer.setPixelRatio(this.pixelRatio);
@@ -153,6 +160,28 @@ export class Stage {
   /** 录 GIF：把画布固定成某个尺寸（例如竖屏 540×960），传 null 恢复跟随窗口。 */
   setFixedSize(size: { w: number; h: number; pr?: number } | null) {
     this.fixedSize = size ? { w: size.w, h: size.h, pr: size.pr ?? 1 } : null;
+    this.resize();
+  }
+
+  /** 换画质档：像素比上限、多重采样、辉光分辨率。 */
+  setQuality(q: number) {
+    const P = params.perf;
+    const tiers = [
+      { pr: P.maxPixelRatio, msaa: P.msaa, bloom: 1 },
+      { pr: 1.5, msaa: Math.min(2, P.msaa), bloom: 1 },
+      { pr: 1.25, msaa: 0, bloom: 0.5 },
+      { pr: 1, msaa: 0, bloom: 0.5 },
+    ];
+    this.quality = THREE.MathUtils.clamp(Math.round(q), 0, tiers.length - 1);
+    const t = tiers[this.quality];
+    this.prCap = t.pr;
+    this.bloomScale = t.bloom;
+    for (const rt of [this.rtBack, this.composer.renderTarget1, this.composer.renderTarget2]) {
+      if (rt.samples !== t.msaa) {
+        rt.samples = t.msaa;
+        rt.dispose(); // 下次用到时按新的采样数重建
+      }
+    }
     this.resize();
   }
 
