@@ -31,6 +31,24 @@ class LayerPass extends Pass {
   }
 }
 
+/** 消毒：NaN / Inf → 0、亮度封顶。任何一个着色器出一个坏像素，都不该被辉光扩散成整屏黑。 */
+const SanitizeShader = {
+  uniforms: { tDiffuse: { value: null as THREE.Texture | null } },
+  vertexShader: /* glsl */ `
+    varying vec2 vUv;
+    void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+  `,
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tDiffuse;
+    varying vec2 vUv;
+    void main() {
+      vec3 c = texture2D(tDiffuse, vUv).rgb;
+      if (!(c.r == c.r) || !(c.g == c.g) || !(c.b == c.b)) c = vec3(0.0);
+      gl_FragColor = vec4(clamp(c, 0.0, 48.0), 1.0);
+    }
+  `,
+};
+
 const FinalShader = {
   uniforms: {
     tDiffuse: { value: null as THREE.Texture | null },
@@ -66,6 +84,7 @@ const FinalShader = {
       return clamp(color, 0.0, 1.0);
     }
     vec3 toSRGB(vec3 c) {
+      c = max(c, vec3(0.0));
       return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c));
     }
     float hash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
@@ -107,6 +126,7 @@ export class Stage {
     this.rtBack = new THREE.WebGLRenderTarget(4, 4, rtOpts);
     this.composer = new EffectComposer(this.gl, new THREE.WebGLRenderTarget(4, 4, rtOpts));
     this.composer.addPass(new LayerPass(this));
+    this.composer.addPass(new ShaderPass(SanitizeShader));
     this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.6, 0.5, 0.7);
     this.composer.addPass(this.bloom);
     this.final = new ShaderPass(FinalShader);

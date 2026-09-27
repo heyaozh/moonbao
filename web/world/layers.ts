@@ -260,7 +260,7 @@ const meteorFrag = /* glsl */ `
   varying float vSide;
   void main() {
     float across = 1.0 - vSide * vSide;
-    float along = pow(1.0 - vAlong, 2.2);
+    float along = pow(clamp(1.0 - vAlong, 0.0, 1.0), 2.2);
     float head = exp(-vAlong * 38.0) * 2.5;
     gl_FragColor = vec4(uColor * (along + head) * across * uAlpha * uBright, 1.0);
   }
@@ -282,8 +282,11 @@ export class Meteors {
   readonly group = new THREE.Group();
   private pool: Meteor[] = [];
   private nextIn = 3;
-  /** 有流星出现时通知外面（月亮会转头看它） */
-  onSpawn?: (m: { head: () => THREE.Vector3; life: number }) => void;
+  /** 有流星出现时通知外面（月亮会转头看它、响一声） */
+  readonly listeners: ((m: { head: () => THREE.Vector3; life: number }) => void)[] = [];
+  set onSpawn(fn: (m: { head: () => THREE.Vector3; life: number }) => void) {
+    this.listeners.push(fn);
+  }
   enabled = true;
 
   constructor() {
@@ -306,6 +309,7 @@ export class Meteors {
         },
         vertexShader: meteorVert,
         fragmentShader: meteorFrag,
+        side: THREE.DoubleSide,
         blending: THREE.AdditiveBlending,
         transparent: true,
         depthWrite: false,
@@ -337,7 +341,7 @@ export class Meteors {
     m.alive = true;
     m.mesh.visible = true;
     const head = () => m.start.clone().addScaledVector(m.dir, m.speed * m.age);
-    this.onSpawn?.({ head, life: m.life });
+    for (const fn of this.listeners) fn({ head, life: m.life });
     return m;
   }
 

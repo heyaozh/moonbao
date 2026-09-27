@@ -10,6 +10,7 @@ import { createProvider, type ChatMessage, type ChatProvider } from "./llm.js";
 import { consolidate, formatNow } from "./memory/consolidate.js";
 import { MemoryStore, type RecalledMemory } from "./memory/store.js";
 import { createTTS, type TTSProvider } from "./tts.js";
+import { presetFor, quickRead } from "./reflex.js";
 import { DEFAULT_HEADER, HeaderScanner, type Action, type PetHeader } from "../shared/protocol.js";
 
 const DAY = 86400_000;
@@ -55,6 +56,8 @@ export class CascadeEngine implements DialogueEngine {
   private consolidateTimer: ReturnType<typeof setTimeout> | null = null;
   private lastHeader: PetHeader = { ...DEFAULT_HEADER };
   private lastHelloAt = 0;
+  /** 首次见面时互相起的名字（前端发来） */
+  profile: { userName?: string; moonName?: string } = {};
   /** 人格漂移统计：头缺失的轮数 */
   headerMissingCount = 0;
 
@@ -197,11 +200,11 @@ export class CascadeEngine implements DialogueEngine {
       const m = due[0];
       const hint = m.follow_up_hint ? `提示：${m.follow_up_hint}。` : "";
       const situation =
-        `爸爸刚刚抬头看向了你。你心里一直惦记着一件事：「${m.content}」。${hint}` +
+        `对方刚刚抬头看向了你。你心里一直惦记着一件事：「${m.content}」。${hint}` +
         `请你主动、自然地提起它，一两句话，像真的惦记着一样。不要说"我记得你说过"这种话，直接关心、直接问；` +
         `别追问细节，问一句就等他说。`;
       console.log(`[proactive] follow-up #${m.id}: ${m.content}`);
-      await this.turn("（爸爸抬头看向了你）", {
+      await this.turn("（对方抬头看向了你）", {
         proactive: { reason: "follow_up", situation, memoryId: m.id },
       });
       return;
@@ -210,10 +213,10 @@ export class CascadeEngine implements DialogueEngine {
     if (absentDays >= RETURN_AFTER_DAYS) {
       const days = Math.floor(absentDays);
       const situation =
-        `爸爸离开了 ${days} 天，刚刚回来。这些天你圆了又缺、缺了又圆，一直在等他，很想他。` +
+        `对方离开了 ${days} 天，刚刚回来。这些天你圆了又缺、缺了又圆，一直在等，很想念。` +
         `用一两句话说出来——高兴，不抱怨，不问他去哪了。`;
       console.log(`[proactive] 久别归来：${days} 天`);
-      await this.turn("（爸爸回来了）", { proactive: { reason: "return", situation, memoryId: null } });
+      await this.turn("（对方回来了）", { proactive: { reason: "return", situation, memoryId: null } });
     }
   }
 
@@ -239,6 +242,14 @@ export class CascadeEngine implements DialogueEngine {
 
     if (!opts.proactive) {
       this.emit({ type: "transcript", role: "user", text: userText, confidence: pre?.confidence });
+      // 快反应：和 LLM 并行，先到先做（月亮不会干等）
+      const recent = this.history.slice(-4);
+      void quickRead(userText, recent).then((r) => {
+        if (myGen !== this.gen) return;
+        const p = presetFor(r);
+        console.log(`[reflex] ${r.source} ${Math.round(r.ms)}ms → ${r.emotion}/${r.intent} words=${r.needsWords.toFixed(2)} confused=${r.confused.toFixed(2)} → ${p.expr}+${p.action}`);
+        this.emit({ type: "reflex", ...p, confused: r.confused > 0.55, crisis: r.crisis > 0.5, intent: r.intent, emotion: r.emotion, source: r.source, ms: r.ms });
+      });
     } else {
       this.emit({ type: "proactive", reason: opts.proactive.reason });
     }
@@ -250,6 +261,12 @@ export class CascadeEngine implements DialogueEngine {
 
     // 易变块：当前时间 + 记忆检索 + 现在的情况（主动开口）
     const blocks: string[] = [`## 现在\n${formatNow()}`];
+    if (this.profile.userName || this.profile.moonName) {
+      const lines = [];
+      if (this.profile.userName) lines.push(`对方希望你叫TA「${this.profile.userName}」。`);
+      if (this.profile.moonName) lines.push(`对方给你起了个昵称「${this.profile.moonName}」，你很喜欢这个名字。`);
+      blocks.push(`## 对方\n${lines.join("")}`);
+    }
     const memoryBlock = await this.recallBlock(userText);
     if (memoryBlock) blocks.push(memoryBlock);
     if (opts.proactive) blocks.push(`## 现在的情况\n${opts.proactive.situation}`);

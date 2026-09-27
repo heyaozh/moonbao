@@ -110,6 +110,9 @@ wss.on("connection", (ws) => {
         case "reset":
           engine.reset();
           break;
+        case "profile":
+          engine.profile = { userName: msg.userName?.slice(0, 40), moonName: msg.moonName?.slice(0, 40) };
+          break;
       }
     } catch (e: any) {
       console.error("[engine]", e);

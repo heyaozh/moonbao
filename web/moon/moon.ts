@@ -166,10 +166,11 @@ const frag = /* glsl */ `
     limb *= vol;
     vec3 col = albedo * (uLit * direct * uBright * limb + uShade * es);
     // 交界线附近的暖色透光
-    float band = exp(-pow(ndl / 0.22, 2.0));
+    float bq = ndl / 0.22;
+    float band = exp(-bq * bq);
     col += uSSSColor * uSSS * band * term * 0.35 * albedo;
     // 边缘泛光：亮面暖、暗面一点点冷
-    float fres = pow(1.0 - ndv, 3.0);
+    float fres = pow(clamp(1.0 - ndv, 0.0, 1.0), 3.0);
     col += uRimColor * uRim * fres * (0.25 + 0.75 * term) * uGlow;
     col += uSelfGlowColor * uSelfGlow * uGlow * albedo;
     col *= mix(0.72, 1.0, clamp(uGlow, 0.0, 1.0)) + max(uGlow - 1.0, 0.0) * 0.3;

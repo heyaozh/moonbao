@@ -252,3 +252,16 @@ body {
     max-height: 50vh;
   }
 }
+
+/* 发送：玻璃上的字飞进空间 */
+.fly-text {
+  position: fixed;
+  z-index: 5;
+  pointer-events: none;
+  white-space: nowrap;
+  font: 400 16px/1.2 var(--ui-font);
+  color: #d6e8ff;
+  text-shadow: 0 0 10px rgba(150, 190, 255, 0.8);
+  transform: translate(0, -50%);
+  will-change: transform, opacity;
+}

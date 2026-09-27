@@ -64,6 +64,21 @@ export type ServerEvent =
   | { type: "audio"; seq: number; gen: number; mp3Base64: string }
   | { type: "audio_done"; gen: number }
   | { type: "hello_ack"; absentDays: number; voice: boolean }
+  /** 快反应（Jev / 本地规则）：LLM 回话之前先做的表情与动作；confused = 难懂的问题（冒问号） */
+  | {
+      type: "reflex";
+      expr: string;
+      action: Action;
+      intensity: number;
+      valence: number;
+      arousal: number;
+      confused: boolean;
+      crisis: boolean;
+      intent: string;
+      emotion: string;
+      source: "jev" | "local";
+      ms: number;
+    }
   | { type: "error"; message: string };
 
 /** 前端 → 服务端 */
@@ -73,7 +88,9 @@ export type ClientMessage =
   | { type: "text"; text: string }
   | { type: "utterance"; wavBase64: string }
   | { type: "interrupt" }
-  | { type: "reset" };
+  | { type: "reset" }
+  /** 首次见面时互相起的名字（本地存着，每次连上都发一遍） */
+  | { type: "profile"; userName?: string; moonName?: string };
 
 // ---------- 头解析（流式，支持多拍） ----------
 
