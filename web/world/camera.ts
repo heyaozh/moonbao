@@ -23,6 +23,7 @@ export class WindowCamera {
   private betaRef: number | null = null;
 
   resize(width: number, height: number) {
+    if (!(width > 0 && height > 0)) return; // 0×0（隐藏时）不改，免得算出 NaN
     const aspect = width / height;
     if (aspect >= 1) {
       this.halfH = 1;

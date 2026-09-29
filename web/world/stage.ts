@@ -146,6 +146,9 @@ export class Stage {
   resize() {
     const w = this.fixedSize?.w ?? innerWidth;
     const h = this.fixedSize?.h ?? innerHeight;
+    // 页面在隐藏的标签 / 面板里打开时视口可能是 0×0：先不排，等有了真尺寸（resize 事件）再排。
+    // 否则相机的半高算成 NaN，那段时间开的对话（气泡、字）永远是 NaN、看不见。
+    if (!(w > 0 && h > 0)) return;
     this.width = w;
     this.height = h;
     this.pixelRatio = this.fixedSize?.pr ?? Math.min(devicePixelRatio || 1, params.perf.maxPixelRatio, this.prCap);
