@@ -23,6 +23,7 @@ import { CHARACTER_NAME } from "./config";
 import { Behaviors } from "./moon/behaviors";
 import { EXPR_LABELS, EXPR_NAMES } from "./moon/expressions";
 import { MoonInteraction } from "./moon/interact";
+import { GazeWisp } from "./moon/wisp";
 import { params } from "./moon/params";
 
 const q = new URLSearchParams(location.search);
@@ -56,12 +57,19 @@ const interact = new MoonInteraction(app.moon, app.stage.cam, canvas, {
     sound.bounce(v);
   },
   onDizzy: () => sound.dizzy(),
-  onTapSky: () => life.notifyActivity(),
+  onTapSky: (_nx, _ny, p) => {
+    life.notifyActivity();
+    wisp.show(p);
+    sound.wisp();
+  },
   // 在星空上往下拖 = 把远处（更早）的对话拉近
   onSkyDrag: (dy) => chat.scrollBy(dy / 260),
 });
 const life = new Behaviors(app.moon, app.world, app.stage.cam, interact, () => app.stage.pixelRatio);
 app.stage.back.add(life.star.points);
+// 点星空：那里亮起一颗半透明的小月亮，它转头看过去
+const wisp = new GazeWisp();
+app.stage.front.add(wisp.mesh);
 
 // ---------- 对话画面 + 演示大脑 + 玻璃界面 ----------
 if (q.has("font") && q.get("font")! in FONT_CANDIDATES) fontState.en = q.get("font") as FontName;
@@ -209,6 +217,7 @@ app.onTick((dt) => {
   sound.mood = app.moon.emotion.valence;
   sound.update(dt);
   interact.update(dt);
+  wisp.update(dt);
   demo.update(dt);
   chat.update(dt);
   ui.update();
