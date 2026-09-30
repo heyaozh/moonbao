@@ -30,6 +30,9 @@ const defaults = {
     mirrorEastWest: false,
     /** 画面中心对准银河此刻最高的一段；但不低于这个高度（度），免得画面对着地平线。 */
     minViewAltDeg: 28,
+    /** 构图：把银河最高的那一段放到画面中心往下这么多度（落在月亮下面，不被它挡住）。0 = 正中。
+     *  只是平移取景，不转方向（仍然上北）。2026-09-30 用户：凌晨看不到银河——当时银河横穿画面正中，正好在月亮后面。 */
+    bandDropDeg: 16,
     /** 天空底色按太阳高度角（度）插值：夜 → 天文晨昏 → 航海晨昏 → 民用晨昏 → 金色时刻 → 白天。
      *  top / mid / bottom 是屏幕上、中、下三处的颜色。 */
     gradient: [
@@ -44,8 +47,8 @@ const defaults = {
     /** 白天星星和银河还剩多少（0 = 看不见）。 */
     dayStarVisibility: 0.0,
     milkyWay: {
-      /** 整体亮度增益（线性）。 */
-      gain: 1.8,
+      /** 整体亮度增益（线性）。2026-09-30 用户：银河和背景星空亮一点（1.8 → 2.4）。 */
+      gain: 2.4,
       /** 黑位：原图的背景雾偏灰，先减掉这么多再放大（线性）。 */
       black: 0.035,
       /** 对比（伽马）：>1 让暗处更暗、银河带更突出。 */
@@ -62,6 +65,11 @@ const defaults = {
       nebulaB: "#e07fb4",
       /** 这一层随倾斜的移动量（0 = 钉住不动，1 = 按真实深度）。2026-09-23 用户：远处的星空「不太动」。 */
       parallax: 0.06,
+      /** 自动曝光（像眼睛适应暗处）：画面里这段银河偏暗时（比如秋冬凌晨头顶是很淡的英仙臂），先提亮再上对比。
+       *  target = 画面里银河较亮处（p90）提到多亮（线性，未上对比前）；max = 最多提亮几倍。看到银心那段时不提亮。 */
+      auto: true,
+      autoTarget: 0.2,
+      autoMax: 4.5,
     },
     /** 星表里的真实恒星（≤ 6 等，约 5000 颗）。 */
     stars: {
@@ -70,9 +78,9 @@ const defaults = {
       /** 点的大小（像素，1 倍屏）：最亮的星与最暗的星。 */
       sizeBright: 7.5,
       sizeFaint: 1.1,
-      /** 亮度：最亮 / 最暗。 */
-      brightBright: 5.0,
-      brightFaint: 0.28,
+      /** 亮度：最亮 / 最暗。2026-09-30 用户：背景星空亮一点（5.0 / 0.28 → 6.0 / 0.42）。 */
+      brightBright: 6.0,
+      brightFaint: 0.42,
       /** 颜色饱和（按 B-V 色指数上色的程度）。 */
       colorSaturation: 0.55,
       twinkle: 0.35,
@@ -81,9 +89,10 @@ const defaults = {
     },
     /** 程序化补星：让画面像概念图那样密。depth = 屏幕后方距离；parallax 同上；warm = 暖金色星的比例。 */
     fill: [
-      { count: 2600, depth: 12, size: 1.0, brightness: 0.45, warm: 0.12, parallax: 0.12 },
-      { count: 900, depth: 6, size: 1.7, brightness: 0.7, warm: 0.35, parallax: 0.3 },
-      { count: 140, depth: 3, size: 3.2, brightness: 1.1, warm: 0.55, parallax: 0.55 },
+      // 2026-09-30 用户：背景星空亮一点、附近的「尘埃」暗一点 → 远的两层 0.45 / 0.7 → 0.6 / 0.8，最近那层 1.1 → 0.7
+      { count: 2600, depth: 12, size: 1.0, brightness: 0.6, warm: 0.12, parallax: 0.12 },
+      { count: 900, depth: 6, size: 1.7, brightness: 0.8, warm: 0.35, parallax: 0.3 },
+      { count: 140, depth: 3, size: 3.2, brightness: 0.7, warm: 0.55, parallax: 0.55 },
     ],
     fillTwinkle: 0.45,
     fillTwinkleSpeed: 1.2,
@@ -113,15 +122,16 @@ const defaults = {
 
   // ───────────── 最近处的虚化光斑（景深） ─────────────
   bokeh: {
-    count: 20,
+    /** 2026-09-30 用户：附近的「尘埃」暗一点（20 个 → 14 个，不透明度 0.06–0.2 → 0.035–0.11） */
+    count: 14,
     /** 深度：负 = 屏幕后方，正 = 玻璃前面（离你更近，倾斜时反向移动）。 */
     depthMin: -0.25,
     depthMax: 0.55,
     /** 大小（单位）与不透明度范围。 */
     sizeMin: 0.05,
     sizeMax: 0.2,
-    opacityMin: 0.06,
-    opacityMax: 0.2,
+    opacityMin: 0.035,
+    opacityMax: 0.11,
     color: "#ffcf88",
     /** 光斑边缘的一圈亮环（真实镜头的 bokeh 有）：0 = 纯软圆。 */
     ring: 0.12,
@@ -179,7 +189,7 @@ const defaults = {
     home: { x: 0, y: 0.82, depth: 1.3 },
     chatHome: { x: -0.98, y: 0.95, depth: 2.6 },
     /** 月面亮部颜色 / 暗部（地照）颜色。 */
-    litColor: "#ffd2a0",
+    litColor: "#ffd7a5",
     shadeColor: "#8d8ca3",
     /** 明暗交界的柔和度（0 = 刀切，0.4 = 很柔）。用户：月相的分界线要柔和。 */
     terminatorSoftness: 0.26,
@@ -189,17 +199,17 @@ const defaults = {
     sss: 0.35,
     sssColor: "#ff9a6b",
     /** 亮面的 HDR 亮度（>1 会被辉光轻轻吃到，像自己在发光）。 */
-    brightness: 0.78,
+    brightness: 0.82,
     /** 边缘泛光（fresnel）强度与颜色。 */
-    rim: 0.38,
+    rim: 0.46,
     /** 边缘暗角（月面靠边稍暗，更有球的体积感）。 */
-    limbDarkening: 0.28,
+    limbDarkening: 0.2,
     /** 体积感：不管月相，额外一盏很弱的「左上方」主光，让球有立体感（概念图右下边缘更暗）。0 = 关。 */
-    volume: 0.5,
+    volume: 0.58,
     volumeDir: { x: -0.55, y: 0.6, z: 0.6 },
     rimColor: "#ffe2a8",
     /** 表面自发光（暖白）。2026-09-23 拍板：发光靠光晕 + 地照，表面自发光封顶 0.2。 */
-    selfGlow: 0.035,
+    selfGlow: 0.09,
     selfGlowMax: 0.2,
     selfGlowColor: "#fff1d6",
     /** 真实月面贴图混入程度（0 = 光面，1 = NASA 柔和贴图，用户偏好样板）。 */
@@ -207,11 +217,11 @@ const defaults = {
     albedoUrl: "/moon/nasa_soft05_albedo_2k.jpg",
     heightUrl: "/moon/nasa_soft05_height_1k.png",
     /** 贴图对比（1 = 原样，<1 更柔）。贴图按近侧平均反照率 0.22 归一化（2026-09-26 实测）。 */
-    textureContrast: 1.15,
+    textureContrast: 0.8,
     /** 高程转法线的凹凸强度（0 = 只有颜色没有起伏）。 */
-    bumpStrength: 0.5,
+    bumpStrength: 0.3,
     /** 程序化小坑的强度（0 = 纯 NASA 柔和样板；概念图里的月亮坑更清楚）。 */
-    craterDetail: 0.7,
+    craterDetail: 0.4,
     /** 脸在月面上的位置（月面经纬度，度）：挑一块月海不打架的地方。 */
     faceLon: 12,
     faceLat: -6,
@@ -227,9 +237,9 @@ const defaults = {
     earthshineMin: 0.05,
     earthshineMax: 0.11,
     /** 光晕：大小（半径的倍数）、不透明度、颜色；glow 状态（dim / brighten）会乘上去。 */
-    haloScale: 2.3,
-    haloOpacity: 0.5,
-    haloColor: "#ffe9c8",
+    haloScale: 2.45,
+    haloOpacity: 0.58,
+    haloColor: "#ffe6c0",
     glowDefault: 1.0,
     glowMin: 0.35,
     glowMax: 1.6,
@@ -239,32 +249,45 @@ const defaults = {
   // ───────────── 脸（画在球面上，跟着月亮一起转） ─────────────
   // 所有长度都是半径的倍数；比例按用户参考图（docs/design.md §2）。
   face: {
-    eyeSpacing: 0.66,
+    // 2026-09-30 用户定的默认形象：「婴儿比例眼睛 + 现在和奶黄软糯之间，适当加一点点的发光灯笼（光稍微暗一点）」。
+    // 原来的默认留在 web/moon/looks.ts 的 classic（?look=classic）。
+    /** 画不画脸（0 = 光月亮：给 AI 出图当底图用，或以后画画模式看整个月面） */
+    visible: 1,
+    eyeSpacing: 0.74,
     /** 眼睛中心的高度（相对球心，负 = 偏下）。 */
-    eyeY: 0.0,
+    eyeY: -0.1,
     /** 眼睛半宽 / 半高。 */
-    eyeW: 0.068,
-    eyeH: 0.078,
+    eyeW: 0.076,
+    eyeH: 0.088,
     eyeColor: "#17141d",
     /** 眼睛高光（小白点）：位置（相对眼睛半径）、大小、亮度。参考图是哑光的，概念图有小高光。 */
     highlightX: -0.32,
     highlightY: 0.38,
-    highlightSize: 0.26,
+    highlightSize: 0.3,
     highlight: 0.85,
+    /** 第二个高光（小一点、在右下 = 闪亮的「星星眼」）：强度（相对第一个；0 = 关）、位置、大小。 */
+    highlight2: 0,
+    highlight2X: 0.32,
+    highlight2Y: -0.34,
+    highlight2Size: 0.13,
     /** 视线偏移幅度（眼睛在脸上滑多远）。 */
     gazeRange: 0.06,
     /** 嘴：中心在眼睛下方多远、宽、线粗、微笑弧的深度。 */
-    mouthBelow: 0.17,
-    mouthWidth: 0.145,
+    mouthBelow: 0.12,
+    mouthWidth: 0.11,
     mouthThickness: 0.021,
-    smileDepth: 0.05,
+    smileDepth: 0.045,
+    /** 猫嘴 ω（0 = 普通的微笑弧，1 = ω）；张嘴、o 型、波浪嘴时自动用原来的形状。 */
+    catMouth: 0,
     mouthColor: "#2a1618",
     mouthInner: "#7a2c33",
     tongueColor: "#ee8a92",
     /** 腮红：离中轴、在眼下多远、半径、颜色、底值与上限、羽化。 */
-    blushX: 0.44,
-    blushBelow: 0.12,
-    blushRadius: 0.13,
+    blushX: 0.47,
+    blushBelow: 0.09,
+    blushRadius: 0.15,
+    /** 腮红的宽高比（1 = 圆，>1 = 横向的椭圆）。 */
+    blushAspect: 1,
     blushColor: "#ff7488",
     blushBase: 0.62,
     blushMax: 0.85,
@@ -318,6 +341,21 @@ const defaults = {
     swayZeta: 0.45,
     /** 看你时的小扫视（度）：偶尔看别处一下再看回来。 */
     glanceDeg: 7,
+    /** 看别处（你点的星空、流星、气泡）时头最多转多少度——脸始终朝着你这边，读得出「它在看那边」；
+     *  剩下的角度交给眼睛（在 lookEyeRangeDeg 内眼睛挪到最边）。2026-09-30 用户：点星空它会背过去，看不出在看。 */
+    lookMaxDeg: 30,
+    lookEyeRangeDeg: 45,
+  },
+
+  // ───────────── 看你点的地方（2026-09-30 用户：点星空它会背过去，看不出在看） ─────────────
+  gaze: {
+    /** 点星空时亮起的小月亮放在多深（窗平面往里，世界单位）：比月亮稍深一点 = 「在天上」 */
+    tapDepth: 1.7,
+    /** 小月亮的大小（世界单位，含光晕）、透明度、存在多久（秒）、颜色 */
+    wispSize: 0.95,
+    wispOpacity: 0.55,
+    wispLife: 1.9,
+    wispColor: "#fff1d6",
   },
 
   // ───────────── squash & stretch ─────────────
@@ -430,6 +468,9 @@ const defaults = {
     textTopY: -0.06,
     /** 多久没说话，月亮回到待机的位置（秒） */
     idleReturn: 40,
+    /** 打字时的小黑洞（2026-09-30 用户：打字时也出现一个小黑洞，但不像语音那样一直变大）：半径、每敲一个字跳一下的幅度 */
+    draftRadius: 0.075,
+    draftPulse: 0.014,
   },
 
   // ───────────── 声音（全部实时合成，零素材；agent 听不见，数值交给用户调） ─────────────

@@ -47,7 +47,7 @@ const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
  * 画面中心对准银河此刻最高的一段（不低于 minViewAlt）；朝向按「以天顶为中心、上北」的星图：
  * 从中心点往星图上方挪一点，就是屏幕的「上」。真实朝向下东在左（抬头看天）；mirror = true 时左右镜像。
  */
-export function skyFrame(date: Date, latDeg: number, lonDeg: number, minAltDeg: number, mirror: boolean): number[] {
+export function skyFrame(date: Date, latDeg: number, lonDeg: number, minAltDeg: number, mirror: boolean, dropDeg = 0): number[] {
   const lat = latDeg * D2R;
   const lon = lonDeg * D2R;
   const best = bestMilkyWayDirection(date, lat, lon);
@@ -62,11 +62,20 @@ export function skyFrame(date: Date, latDeg: number, lonDeg: number, minAltDeg: 
     const z = Math.atan2(-x, y);
     return horizontalVector(Math.PI / 2 - rho, z);
   };
-  const f = horizontalVector(alt, az);
+  let f = horizontalVector(alt, az);
   const [cx, cy] = chart(alt, az);
   const up0 = sub(unchart(cx, cy + 0.01), f);
   // 与 f 正交化
   let u = norm(sub(up0, f.map((v) => v * dot(up0, f)) as Vec3));
+  // 构图：取景中心往「上」挪 dropDeg，银河最高的那段就落在画面中心下面（月亮在上半屏，不挡它）
+  if (dropDeg) {
+    const a = dropDeg * D2R;
+    const c = Math.cos(a);
+    const s = Math.sin(a);
+    const f2 = norm([f[0] * c + u[0] * s, f[1] * c + u[1] * s, f[2] * c + u[2] * s]);
+    u = norm([u[0] * c - f[0] * s, u[1] * c - f[1] * s, u[2] * c - f[2] * s]);
+    f = f2;
+  }
   let r = norm(cross(f, u));
   if (mirror) r = [-r[0], -r[1], -r[2]];
   u = norm(cross(r, f)) as Vec3;
@@ -138,10 +147,10 @@ export class World {
     const vis = night + (1 - night) * params.sky.dayStarVisibility;
 
     // 星空朝向：随时间慢慢转，没必要每帧算（每分钟 / 覆盖变了才算）
-    const key = `${Math.floor(date.getTime() / 60000)}|${lat.toFixed(2)}|${lon.toFixed(2)}|${params.sky.minViewAltDeg}|${params.sky.mirrorEastWest}`;
+    const key = `${Math.floor(date.getTime() / 60000)}|${lat.toFixed(2)}|${lon.toFixed(2)}|${params.sky.minViewAltDeg}|${params.sky.mirrorEastWest}|${params.sky.bandDropDeg}`;
     if (key !== this.frameKey) {
       this.frameKey = key;
-      this.frame = skyFrame(date, lat, lon, params.sky.minViewAltDeg, params.sky.mirrorEastWest);
+      this.frame = skyFrame(date, lat, lon, params.sky.minViewAltDeg, params.sky.mirrorEastWest, params.sky.bandDropDeg);
     }
 
     // 真实月相：相位角 + 亮边方向 → 世界坐标里的太阳方向（+z 朝观察者，+y 朝上）
