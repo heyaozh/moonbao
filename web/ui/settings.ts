@@ -72,8 +72,13 @@ export function uiLang(p: Profile): "en" | "zh" {
 
 const T = {
   en: {
-    title: "Settings",
+    title: "Menu",
     account: "Account",
+    shop: "Shop",
+    shopNote: "Coming soon: paints, stickers and little outfits for your moon.",
+    look: "My moon",
+    lookNote: "Coming soon: choose its eyes, mouth, blush and glow — one moon that's only yours.",
+    soon: "Soon",
     signIn: "Sign in — coming soon",
     signNote: "Your moon lives on this device for now. Accounts will let it follow you to a new phone.",
     names: "Names",
@@ -98,8 +103,13 @@ const T = {
     done: "Done",
   },
   zh: {
-    title: "设置",
+    title: "菜单",
     account: "账号",
+    shop: "商城",
+    shopNote: "即将推出：颜料、贴纸，还有给月亮的小装扮。",
+    look: "我的月亮",
+    lookNote: "即将推出：挑它的眼睛、嘴巴、腮红和光——一个只属于你的月亮。",
+    soon: "即将推出",
     signIn: "登录 · 即将推出",
     signNote: "现在月亮住在这台手机里。以后有了账号，换手机它也能跟着你。",
     names: "名字",
@@ -164,6 +174,16 @@ export class SettingsSheet {
           <h3>${t.account}</h3>
           <div class="acct"><div class="avatar">☾</div><button class="soft" disabled>${t.signIn}</button></div>
           <p class="note">${t.signNote}</p>
+        </section>
+        <section>
+          <h3>${t.look}</h3>
+          <div class="acct"><div class="avatar">✦</div><button class="soft" disabled>${t.soon}</button></div>
+          <p class="note">${t.lookNote}</p>
+        </section>
+        <section>
+          <h3>${t.shop}</h3>
+          <div class="acct"><div class="avatar">✧</div><button class="soft" disabled>${t.soon}</button></div>
+          <p class="note">${t.shopNote}</p>
         </section>
         <section>
           <h3>${t.names}</h3>
