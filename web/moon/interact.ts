@@ -120,7 +120,11 @@ export class MoonInteraction {
     this.down = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), onMoon: !!hit, hit, moved: false };
     if (hit) {
       e.preventDefault();
+      try {
       this.canvas.setPointerCapture?.(e.pointerId);
+    } catch {
+      /* 没有活动指针（合成事件）：不抓也行 */
+    }
       // 长按：贴过来蹭你
       this.longTimer = setTimeout(() => {
         if (this.down && !this.down.moved && this.down.onMoon) this.startNuzzle();

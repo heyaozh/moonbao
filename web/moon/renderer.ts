@@ -72,6 +72,12 @@ export class MoonRenderer implements CharacterRenderer {
   /** 额外的注视目标（世界坐标）：看流星、看黑洞气泡、看手指；null = 看你 */
   lookTarget: THREE.Vector3 | null = null;
   lookWeight = 0;
+  /** 画月亮（G1）：飞到眼前、放大，由你转它（不再自己转过来看你） */
+  paintMode = false;
+  /** 画的时候的视半径 = 屏幕半宽的几倍 */
+  paintZoom = 1.3;
+  /** 画的时候的朝向（世界坐标），手势直接改它 */
+  readonly paintRot = new THREE.Quaternion();
 
   private target = { valence: 0.2, arousal: 0.5 };
   private cur = { valence: 0.2, arousal: 0.5 };
@@ -172,7 +178,11 @@ export class MoonRenderer implements CharacterRenderer {
     this.swayY.step(dt);
 
     this.pos.tune(P.motion.posOmega, P.motion.posZeta);
-    this.pos.setTarget(home.x + driftX + pose.dx + this.swayX.x, home.y + driftY + pose.dy + this.swayY.x, -home.depth + pose.dz);
+    if (this.paintMode) {
+      // 视半径 A（窗平面上）= R · eyeZ / (eyeZ − z) → z = eyeZ − R · eyeZ / A；稍微往上一点，给下面的工具栏留地方
+      const A = this.paintZoom * cam.halfW;
+      this.pos.setTarget(0, cam.halfH * 0.12, cam.eyeZ - (R * cam.eyeZ) / A);
+    } else this.pos.setTarget(home.x + driftX + pose.dx + this.swayX.x, home.y + driftY + pose.dy + this.swayY.x, -home.depth + pose.dz);
     this.pos.step(dt);
     // 手势 / 物理的位移直接叠加（不走弹簧：弹墙的反弹要干脆）
     this.body.root.position.set(this.pos.x + this.extra.pos.x, this.pos.y + this.extra.pos.y, this.pos.z + this.extra.pos.z);
@@ -214,6 +224,7 @@ export class MoonRenderer implements CharacterRenderer {
     const qPose = this.tmpQ2.setFromEuler(this.tmpE.set(-pose.pitch + this.glanceS.y, this.glanceS.x, pose.roll + driftRoll, "YXZ"));
     this.rot.target.copy(qLook).multiply(qPose);
     if (qFocusW) this.rot.target.multiply(qFocusW);
+    if (this.paintMode) this.rot.target.copy(this.paintRot);
     this.rot.omega = P.motion.rotOmega;
     this.rot.zeta = P.motion.rotZeta;
     this.rot.step(dt);

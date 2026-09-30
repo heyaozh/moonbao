@@ -24,6 +24,8 @@ import { Behaviors } from "./moon/behaviors";
 import { EXPR_LABELS, EXPR_NAMES } from "./moon/expressions";
 import { MoonInteraction } from "./moon/interact";
 import { GazeWisp } from "./moon/wisp";
+import { MoonPaint } from "./moon/paint";
+import { PaintBar } from "./ui/paintbar";
 import { params } from "./moon/params";
 import { applyLooks, LOOKS } from "./moon/looks";
 
@@ -73,6 +75,8 @@ app.stage.back.add(life.star.points);
 // 点星空：那里亮起一颗半透明的小月亮，它转头看过去
 const wisp = new GazeWisp();
 app.stage.front.add(wisp.mesh);
+// 画月亮（G1）：画布一直贴在月亮上；进入画画模式时它飞到眼前、放大
+const paint = new MoonPaint(app.moon, app.stage.cam, canvas);
 
 // ---------- 对话画面 + 演示大脑 + 玻璃界面 ----------
 if (q.has("font") && q.get("font")! in FONT_CANDIDATES) fontState.en = q.get("font") as FontName;
@@ -124,6 +128,32 @@ const sendProfile = () => {
 };
 const settings = new SettingsSheet(profile, () => app.world.location.label);
 settings.onOpenChange = (open) => ui.settingsBtn.classList.toggle("open", open);
+// 画月亮：手势交给画笔，聊天栏换成工具栏
+const paintBar = new PaintBar(paint, () => uiLang(profile));
+const chatbar = document.getElementById("chatbar")!;
+let gyroWasShown = false;
+settings.onPaint = () => paint.enter();
+paint.onEnter = () => {
+  interact.enabled = false;
+  interact.offset.set(0, 0, 0);
+  interact.vel.set(0, 0, 0);
+  chatbar.hidden = true;
+  // 陀螺仪提示按钮在后面才声明（场景可能在那之前就进画画模式）：这里直接按 id 找
+  const g = document.getElementById("gyroBtn");
+  gyroWasShown = !!g && !g.hidden;
+  if (g) g.hidden = true;
+  paintBar.show();
+  sound.tick();
+};
+paint.onExit = () => {
+  interact.enabled = true;
+  chatbar.hidden = false;
+  const g = document.getElementById("gyroBtn");
+  if (g && gyroWasShown) g.hidden = false;
+  paintBar.hide();
+  sound.shimmer();
+};
+paint.onChange = () => paintBar.refresh();
 /** 界面文字跟着设置里的语言走（默认跟系统语言；用户主要是英文） */
 function applyLang() {
   const zh = uiLang(profile) === "zh";
@@ -223,14 +253,15 @@ app.onTick((dt) => {
   sound.update(dt);
   interact.update(dt);
   wisp.update(dt);
+  paint.update();
   demo.update(dt);
   chat.update(dt);
   ui.update();
-  // 聊天时不自己玩
-  life.paused = app.moon.chatMode;
+  // 聊天时、画画时不自己玩
+  life.paused = app.moon.chatMode || paint.active;
   life.update(dt);
 });
-const sceneCtx: SceneCtx = { chat, demo, life, onboarding, interact };
+const sceneCtx: SceneCtx = { chat, demo, life, onboarding, interact, paint };
 
 const sceneName = applyScene(app, q.get("scene") ?? "real", sceneCtx);
 // 第一次打开：首次见面；以后打开：它正在做自己的事，被你发现
@@ -260,7 +291,8 @@ const embedded = (() => {
 })();
 if (matchMedia("(pointer: coarse)").matches && DOE && !embedded) {
   if (typeof DOE.requestPermission === "function") {
-    gyroBtn.hidden = false; // iOS：必须用户手势
+    gyroBtn.hidden = paint.active; // iOS：必须用户手势（画画时先不打扰，退出后再出现）
+    gyroWasShown = true;
     gyroBtn.onclick = async () => {
       try {
         if ((await DOE.requestPermission!()) === "granted") startGyro();
@@ -528,6 +560,7 @@ window.__sound = sound;
 window.__chat = chat;
 window.__demo = demo;
 window.__interact = interact;
+(window as unknown as { __paint: MoonPaint }).__paint = paint;
 window.__life = life;
 window.__app = app;
 window.__params = params;
