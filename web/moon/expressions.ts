@@ -15,6 +15,8 @@ export interface FaceParams {
   squeeze: number;
   /** @ @ 晕 0..1 */
   dizzy: number;
+  /** ‿ ‿ 安详地闭着（睡着、享受）0..1 */
+  closed: number;
   /** 眼睛大小倍数（惊讶大、呆小） */
   eyeScale: number;
   /** 八字眉那种下垂的难过眼 0..1 */
@@ -33,7 +35,7 @@ export interface FaceParams {
 }
 
 export const NEUTRAL: FaceParams = {
-  openL: 1, openR: 1, happy: 0, squeeze: 0, dizzy: 0, eyeScale: 1, sad: 0, gazeX: 0, gazeY: 0,
+  openL: 1, openR: 1, happy: 0, squeeze: 0, dizzy: 0, closed: 0, eyeScale: 1, sad: 0, gazeX: 0, gazeY: 0,
   curve: 0.65, open: 0, width: 1, round: 0, wave: 0, blush: 0,
 };
 
@@ -47,7 +49,7 @@ export const EXPRESSIONS = {
   focused: { eyeScale: 0.92, round: 1, open: 0.2, width: 0.75 },
   thinking: { gazeX: 0.7, gazeY: 0.75, curve: 0.1, wave: 0.55, width: 0.8 },
   sleepy: { openL: 0.28, openR: 0.28, eyeScale: 0.95, round: 0.85, open: 0.25, width: 0.7 },
-  sleeping: { openL: 0, openR: 0, curve: 0.3, round: 0.7, open: 0.12, width: 0.55 },
+  sleeping: { closed: 1, curve: 0.3, round: 0.7, open: 0.12, width: 0.55 },
   sad: { sad: 1, openL: 0.85, openR: 0.85, gazeY: -0.55, curve: -0.65, width: 0.85 },
   pout: { sad: 0.45, eyeScale: 1.12, curve: -0.25, wave: 1, width: 0.8, blush: 0.5 },
   dizzy: { dizzy: 1, wave: 0.85, open: 0.25, width: 0.9 },

@@ -48,7 +48,7 @@ const milkyFrag = /* glsl */ `
     if (dot(dx, dx) + dot(dy, dy) > dot(dx2, dx2) + dot(dy2, dy2)) { dx = dx2; dy = dy2; }
     vec3 c = textureGrad(uTex, uv, dx, dy).rgb;
     c = max(c - uBlack, 0.0) / (1.0 - uBlack);
-    c = pow(c, vec3(uContrast));
+    c = pow(max(c, vec3(0.0)), vec3(uContrast));
     float L = dot(c, vec3(0.2126, 0.7152, 0.0722));
     vec3 chroma = c / max(L, 1e-4);
     float lo = sstep(0.0, 0.18, L);

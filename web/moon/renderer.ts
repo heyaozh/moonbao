@@ -40,7 +40,8 @@ class QuatSpring {
       if (s > 1e-6) this.axis.set(this.tq.x / s, this.tq.y / s, this.tq.z / s);
       else this.axis.set(0, 0, 0);
       const k = this.omega * this.omega * this.hold;
-      const c = 2 * this.zeta * this.omega * (0.35 + 0.65 * this.hold);
+      // 放开（hold→0，被甩 / 转圈时）阻尼也跟着小：零重力里多转一会儿；hold = 1 时和原来一样
+      const c = 2 * this.zeta * this.omega * (0.08 + 0.92 * this.hold);
       this.w.addScaledVector(this.axis, k * ang * h).addScaledVector(this.w, -c * h);
       const wl = this.w.length();
       if (wl > 1e-7) {
@@ -219,7 +220,7 @@ export class MoonRenderer implements CharacterRenderer {
     // 眨眼：只作用在「睁着的圆眼」上；^ ^ / >< / @ 不眨
     this.blinker.lidCap = pose.lidCap;
     this.blinker.update(dt, this.cur.valence, arousal);
-    const blinkable = 1 - clamp(face.happy + face.squeeze + face.dizzy, 0, 1);
+    const blinkable = 1 - clamp(face.happy + face.squeeze + face.dizzy + face.closed, 0, 1);
     const open = 1 - (1 - this.blinker.openness) * blinkable;
     const daze = this.blinker.daze;
     const squint = this.blinker.shape === "squint" && name !== "sad" ? 1 : 0;

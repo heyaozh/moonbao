@@ -7,6 +7,8 @@ export interface BusEvents {
   /** 用户开始/停止打字（Tier 0 反射源） */
   "user:typing": { active: boolean };
   "user:send": { text: string };
+  /** 你抢话了（发出一句 / 开始说话）：它没说完的那句停下，旧回复还在路上的字作废 */
+  "user:barge": Record<string, never>;
   "net:status": { connected: boolean };
   "engine:state": { value: EngineState };
   "engine:emotion": { valence: number; arousal: number };
@@ -17,12 +19,16 @@ export interface BusEvents {
   "engine:proactive": { reason: "follow_up" | "return" };
   "engine:hello": { absentDays: number; voice: boolean };
   "engine:error": { message: string };
+  /** 快反应（Jev / 本地规则）：LLM 之前的表情与动作 */
+  "engine:reflex": { expr: string; action: Action; intensity: number; valence: number; arousal: number; confused: boolean; crisis: boolean; intent: string; emotion: string; source: string; ms: number };
   /** 经节拍器重新放出的协议流（渲染层与气泡消费这些，不直接消费 engine:*） */
   "paced:emotion": { valence: number; arousal: number };
   "paced:action": { name: Action; intensity: number };
   /** 已显现的正文全文（逐字增长） */
   "paced:text": { text: string };
   "paced:done": { text: string };
+  /** 预告：它接下来要说的话有多长（演示剧本用，短句会写得大） */
+  "moon:hint": { length: number; text?: string };
 }
 
 type Handler<K extends keyof BusEvents> = (payload: BusEvents[K]) => void;

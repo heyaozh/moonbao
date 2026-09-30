@@ -6,6 +6,12 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["vite", "--host"],
       "port": 5176
+    },
+    {
+      "name": "moon-brain",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["tsx", "watch", "server/index.ts"],
+      "port": 8787
     }
   ]
 }

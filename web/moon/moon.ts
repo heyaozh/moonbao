@@ -36,7 +36,7 @@ const frag = /* glsl */ `
   uniform float uBlushX, uBlushBelow, uBlushR, uBlushFeather, uBlushOpacity;
   uniform vec3 uEyeColor, uMouthColor, uMouthInner, uTongue, uBlushColor;
   uniform vec2 uOpen;       // 左右眼睁开
-  uniform float uHappy, uSqueeze, uDizzy, uEyeScale, uSad;
+  uniform float uHappy, uSqueeze, uDizzy, uClosed, uEyeScale, uSad;
   uniform vec2 uGaze;
   uniform float uCurve, uMouthOpen, uMWidth, uRound, uWave;
   uniform float uTime;
@@ -96,7 +96,10 @@ const frag = /* glsl */ `
     float dSq = min(sdSegment(p, vec2(-sx * ew, eh * 0.75), vec2(sx * ew * 0.9, 0.0)), sdSegment(p, vec2(sx * ew * 0.9, 0.0), vec2(-sx * ew, -eh * 0.75))) - th;
     // @ 晕：旋涡
     float dDz = sdSpiral(p * vec2(1.0, 0.95), eh * 0.42, eh * 1.25) - th * 0.8;
+    // ‿ 安详地闭着：向下弯的弧
+    float dClosed = sdBow(p - vec2(0.0, eh * 0.1), ew * 1.0, -eh * 0.5) - th * 0.9;
     float d = mix(dOval, dHappy, uHappy);
+    d = mix(d, dClosed, uClosed);
     d = mix(d, dSq, uSqueeze);
     d = mix(d, dDz, uDizzy);
     // 难过：上眼睑斜切掉内上角
@@ -107,7 +110,7 @@ const frag = /* glsl */ `
     }
     float cov = sstep(aa, -aa, d);
     // 高光：只在圆眼上
-    float hv = (1.0 - uHappy) * (1.0 - uSqueeze) * (1.0 - uDizzy) * sstep(0.35, 0.8, open);
+    float hv = (1.0 - uHappy) * (1.0 - uSqueeze) * (1.0 - uDizzy) * (1.0 - uClosed) * sstep(0.35, 0.8, open);
     vec2 hp = p - vec2(uHlX * ew, uHlY * eh);
     hl = hv * sstep(uHlSize * ew + aa, uHlSize * ew - aa, length(hp)) * cov;
     return cov;
@@ -166,10 +169,11 @@ const frag = /* glsl */ `
     limb *= vol;
     vec3 col = albedo * (uLit * direct * uBright * limb + uShade * es);
     // 交界线附近的暖色透光
-    float band = exp(-pow(ndl / 0.22, 2.0));
+    float bq = ndl / 0.22;
+    float band = exp(-bq * bq);
     col += uSSSColor * uSSS * band * term * 0.35 * albedo;
     // 边缘泛光：亮面暖、暗面一点点冷
-    float fres = pow(1.0 - ndv, 3.0);
+    float fres = pow(clamp(1.0 - ndv, 0.0, 1.0), 3.0);
     col += uRimColor * uRim * fres * (0.25 + 0.75 * term) * uGlow;
     col += uSelfGlowColor * uSelfGlow * uGlow * albedo;
     col *= mix(0.72, 1.0, clamp(uGlow, 0.0, 1.0)) + max(uGlow - 1.0, 0.0) * 0.3;
@@ -309,6 +313,7 @@ export class MoonBody {
         uHappy: { value: 0 },
         uSqueeze: { value: 0 },
         uDizzy: { value: 0 },
+        uClosed: { value: 0 },
         uEyeScale: { value: 1 },
         uSad: { value: 0 },
         uGaze: { value: new THREE.Vector2() },
@@ -444,6 +449,7 @@ export class MoonBody {
     u.uHappy.value = THREE.MathUtils.clamp(f.happy, 0, 1);
     u.uSqueeze.value = THREE.MathUtils.clamp(f.squeeze, 0, 1);
     u.uDizzy.value = THREE.MathUtils.clamp(f.dizzy, 0, 1);
+    u.uClosed.value = THREE.MathUtils.clamp(f.closed, 0, 1);
     u.uEyeScale.value = f.eyeScale;
     u.uSad.value = THREE.MathUtils.clamp(f.sad, 0, 1);
     (u.uGaze.value as THREE.Vector2).set(f.gazeX, f.gazeY);

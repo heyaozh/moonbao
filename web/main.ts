@@ -1,10 +1,24 @@
 // 前端入口：App（舞台 / 世界 / 月亮 / 运行时）+ 输入（倾斜）+ 调试面板 + 无头验收工具。
 // ?scene=<名字> 打开某个画面状态；?brain=off 不连服务端；?panel=off 收起面板。
 
+import "lxgw-wenkai-screen-webfont/lxgwwenkaigbscreen.css";
+import "@fontsource/dancing-script/400.css";
+import "@fontsource/sacramento/400.css";
+import "@fontsource/caveat/400.css";
+import "@fontsource/ms-madi/400.css";
 import { ACTIONS, type Action } from "../shared/protocol";
 import { App } from "./app/app";
 import { Panel } from "./app/panel";
-import { applyScene, SCENES } from "./app/scenes";
+import { applyScene, SCENES, type SceneCtx } from "./app/scenes";
+import { Mic, toBase64 } from "./audio/mic";
+import { SoundEngine } from "./audio/synth";
+import { ChatView } from "./chat/chatview";
+import { DemoBrain } from "./chat/demo";
+import { FONT_CANDIDATES, fontState, type FontName } from "./chat/glyphs";
+import { Onboarding } from "./ui/onboarding";
+import { loadProfile, loadUserSettings, SettingsSheet, uiLang } from "./ui/settings";
+import { GlassUI } from "./ui/ui";
+import { loadLocation } from "./astro/location";
 import { CHARACTER_NAME } from "./config";
 import { Behaviors } from "./moon/behaviors";
 import { EXPR_LABELS, EXPR_NAMES } from "./moon/expressions";
@@ -12,28 +26,202 @@ import { MoonInteraction } from "./moon/interact";
 import { params } from "./moon/params";
 
 const q = new URLSearchParams(location.search);
+// 用户在设置里调过的偏好（声音、画面）先盖到 params 上，再建场景
+loadUserSettings();
+const profile = loadProfile();
 const BRAIN = q.get("brain") !== "off";
 document.title = `Moonbao · ${CHARACTER_NAME}`;
 
 const canvas = document.getElementById("moonCanvas") as HTMLCanvasElement;
 const app = new App(canvas);
+// 声音：浏览器要求第一次触碰后才能出声
+const sound = new SoundEngine();
+const unlock = () => void sound.unlock();
+addEventListener("pointerdown", unlock, { once: true });
+addEventListener("keydown", unlock, { once: true });
 
 // ---------- 不聊天也好玩：手势 + 小日子 ----------
 const interact = new MoonInteraction(app.moon, app.stage.cam, canvas, {
-  onPoke: () => life.notifyActivity(),
-  onGrab: () => life.notifyActivity(),
-  onBounce: () => life.notifyActivity(),
+  onPoke: () => {
+    life.notifyActivity();
+    sound.poke();
+  },
+  onGrab: () => {
+    life.notifyActivity();
+    sound.grab();
+  },
+  onRelease: (v) => sound.release(v),
+  onBounce: (v) => {
+    life.notifyActivity();
+    sound.bounce(v);
+  },
+  onDizzy: () => sound.dizzy(),
   onTapSky: () => life.notifyActivity(),
+  // 在星空上往下拖 = 把远处（更早）的对话拉近
+  onSkyDrag: (dy) => chat.scrollBy(dy / 260),
 });
 const life = new Behaviors(app.moon, app.world, app.stage.cam, interact, () => app.stage.pixelRatio);
 app.stage.back.add(life.star.points);
+
+// ---------- 对话画面 + 演示大脑 + 玻璃界面 ----------
+if (q.has("font") && q.get("font")! in FONT_CANDIDATES) fontState.en = q.get("font") as FontName;
+const chat = new ChatView(app);
+chat.onGlyph = () => sound.glyph();
+app.world.meteors.onSpawn = () => sound.meteor();
+const demo = new DemoBrain(app.bus);
+const mic = new Mic();
+const ui = new GlassUI(app.bus, chat, app.stage.cam, {
+  send(text) {
+    life.notifyActivity();
+    sound.send();
+    sound.resetGlyphs();
+    if (onboarding.handleInput(text)) return;
+    if (app.client.connected) app.client.send({ type: "text", text });
+    else demo.reply(text);
+  },
+  async voiceStart() {
+    const ok = await mic.start();
+    if (ok) sound.holeStart();
+    return ok;
+  },
+  async voiceStop() {
+    sound.holeStop();
+    const rec = await mic.stop();
+    if (rec) sound.shimmer();
+    if (!rec) return null;
+    if (app.client.connected && voiceOnServer) {
+      // 真识别：交给服务端（本机 whisper）；识别结果经 engine:transcript 回来
+      app.client.send({ type: "utterance", wavBase64: toBase64(rec.wav) });
+      return pendingTranscript();
+    }
+    // 没有识别服务：演示里用一句示例话
+    return ["Will you stay with me?", "Long day.", "I'm a bit nervous today."][Math.floor(Math.random() * 3)];
+  },
+  voiceLevel: () => {
+    const v = mic.level();
+    sound.holeLevelSet(v);
+    return v;
+  },
+  openSettings: () => {
+    sound.tick();
+    settings.toggle();
+  },
+});
+// ---------- 设置 + 首次见面 ----------
+const sendProfile = () => {
+  if (app.client.connected) app.client.send({ type: "profile", userName: profile.userName || undefined, moonName: profile.moonName || undefined });
+};
+const settings = new SettingsSheet(profile, () => app.world.location.label);
+/** 界面文字跟着设置里的语言走（默认跟系统语言；用户主要是英文） */
+function applyLang() {
+  const zh = uiLang(profile) === "zh";
+  if (!onboarding?.active) ui.input.placeholder = zh ? "想和月亮说些什么…" : "Say something to the moon…";
+  ui.voiceBtn.setAttribute("aria-label", zh ? "按住说话" : "Hold to talk");
+  ui.settingsBtn.setAttribute("aria-label", zh ? "设置" : "Settings");
+  const g = document.querySelector("#gyroBtn span");
+  if (g) g.textContent = zh ? "倾斜手机，看看盒子里面" : "Tilt your phone to look inside";
+  document.documentElement.lang = zh ? "zh-CN" : "en";
+}
+settings.onChange = (what) => {
+  if (what === "sound") sound.applyVolumes();
+  if (what === "profile") sendProfile();
+  if (what === "sky") app.world.location = loadLocation();
+  if (what === "lang") applyLang();
+};
+const onboarding = new Onboarding(app, chat, demo, interact, life, profile, ui.input);
+onboarding.onDone = sendProfile;
+applyLang();
+app.bus.on("engine:hello", sendProfile);
+let voiceOnServer = false;
+let transcriptWaiter: ((t: string | null) => void) | null = null;
+function pendingTranscript() {
+  return new Promise<string | null>((resolve) => {
+    transcriptWaiter = resolve;
+    setTimeout(() => {
+      if (transcriptWaiter === resolve) {
+        transcriptWaiter = null;
+        resolve(null);
+      }
+    }, 15000);
+  });
+}
+app.bus.on("engine:hello", ({ voice }) => (voiceOnServer = voice));
+app.bus.on("engine:transcript", ({ role, text }) => {
+  if (role === "user" && transcriptWaiter) {
+    const w = transcriptWaiter;
+    transcriptWaiter = null;
+    w(text);
+  }
+});
+// 大脑 → 画面
+app.bus.on("paced:text", ({ text }) => chat.moonSay(text, false));
+app.bus.on("paced:done", ({ text }) => {
+  if (text) chat.moonSay(text, true);
+});
+app.bus.on("engine:state", ({ value }) => chat.setThinking(value === "thinking"));
+app.bus.on("moon:hint", ({ length, text }) => chat.hint(length, text));
+// 快反应（Jev）：LLM 回话之前先做的表情与动作；难懂的问题冒 3D 问号，直到开始写字
+let sentAt = 0;
+const lat: Record<string, number[]> = { reflex: [], emotion: [], text: [], done: [] };
+const pushLat = (k: string, v: number) => {
+  lat[k].push(v);
+  if (lat[k].length > 10) lat[k].shift();
+};
+app.bus.on("user:send", () => (sentAt = performance.now()));
+// 你一抢话，它没说完的那句就停（已写出的留在上一轮）：演示大脑作废剩下的拍子，真大脑作废这一轮生成
+app.bus.on("user:barge", () => {
+  demo.interrupt();
+  if (app.client.connected) app.client.send({ type: "interrupt" });
+});
+app.bus.on("engine:reflex", (r) => {
+  if (sentAt) pushLat("reflex", performance.now() - sentAt);
+  app.moon.setEmotion(r.valence, r.arousal);
+  app.moon.flashExpr(r.expr as any, 2.4);
+  app.moon.playAction(r.action, r.intensity, "brain");
+  if (r.confused) chat.thinking.showQuestion(true);
+});
+let firstText = true;
+let gotEmotion = false;
+app.bus.on("engine:emotion", () => {
+  if (sentAt && !gotEmotion) {
+    pushLat("emotion", performance.now() - sentAt);
+    gotEmotion = true;
+  }
+});
+app.bus.on("engine:reply_delta", () => {
+  if (sentAt && firstText) {
+    pushLat("text", performance.now() - sentAt);
+    firstText = false;
+  }
+});
+app.bus.on("paced:text", () => chat.thinking.showQuestion(false));
+app.bus.on("engine:reply_done", () => {
+  if (sentAt) pushLat("done", performance.now() - sentAt);
+  sentAt = 0;
+  firstText = true;
+  gotEmotion = false;
+});
+const median = (a: number[]) => (a.length ? [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)] : NaN);
+app.bus.on("user:typing", () => life.notifyActivity());
 app.onTick((dt) => {
+  onboarding.update(dt);
+  sound.night = app.world.state.night;
+  sound.mood = app.moon.emotion.valence;
+  sound.update(dt);
   interact.update(dt);
+  demo.update(dt);
+  chat.update(dt);
+  ui.update();
+  // 聊天时不自己玩
+  life.paused = app.moon.chatMode;
   life.update(dt);
 });
+const sceneCtx: SceneCtx = { chat, demo, life, onboarding, interact };
 
-const sceneName = applyScene(app, q.get("scene") ?? "real");
-if (!q.has("scene") || sceneName === "real") life.playOpening();
+const sceneName = applyScene(app, q.get("scene") ?? "real", sceneCtx);
+// 第一次打开：首次见面；以后打开：它正在做自己的事，被你发现
+if (!q.has("scene") && !profile.onboarded) onboarding.start();
+else if (!q.has("scene") || sceneName === "real") life.playOpening();
 if (q.has("hour")) app.world.hourOverride = Number(q.get("hour"));
 if (q.has("phase")) params.light.phaseDeg = Number(q.get("phase"));
 app.start();
@@ -88,7 +276,7 @@ if (q.get("panel") === "off") panel.root.hidden = true;
   panel.buttons(
     s,
     Object.entries(SCENES).map(([k, v]) => [v.label, () => {
-      applyScene(app, k);
+      applyScene(app, k, sceneCtx);
       panel.refresh();
       history.replaceState(null, "", `?scene=${k}`);
     }]),
@@ -114,6 +302,21 @@ if (q.get("panel") === "off") panel.root.hidden = true;
   let ar = 0.5;
   panel.slider(a, "心情", -1, 1, 0.01, () => v, (x) => app.moon.setEmotion((v = x), ar));
   panel.slider(a, "活力", 0, 1, 0.01, () => ar, (x) => app.moon.setEmotion(v, (ar = x)));
+}
+{
+  const s = panel.section("字");
+  panel.buttons(s, (Object.keys(FONT_CANDIDATES) as FontName[]).map((f) => [f, () => (fontState.en = f)]), true);
+  panel.param(s, "英文字号", "writer.enPx", 18, 48, 1);
+  panel.param(s, "中文字号", "writer.zhPx", 16, 40, 1);
+  panel.param(s, "光点/字", "writer.perChar", 10, 120, 1);
+  panel.param(s, "光点粗细", "writer.particleSize", 0.4, 3);
+  panel.param(s, "日常飞行", "writer.dailyDur", 0.2, 2);
+  panel.param(s, "隆重飞行", "writer.grandDur", 0.5, 3);
+  panel.param(s, "字后暗底", "writer.backing", 0, 0.8);
+  panel.param(s, "透镜", "bubble.lens", 0, 3);
+  panel.param(s, "透镜范围", "bubble.margin", 0.05, 0.5);
+  panel.param(s, "往后退深", "chat.stepDepth", 0.3, 2.5);
+  panel.param(s, "往上挪", "chat.stepUp", 0, 2);
 }
 {
   const s = panel.section("月亮");
@@ -184,6 +387,25 @@ if (q.get("panel") === "off") panel.root.hidden = true;
   panel.buttons(s, [["放一颗流星", () => app.world.meteors.spawn(app.stage.cam)], ["自动摇", () => (app.stage.cam.autoShake = !app.stage.cam.autoShake)]]);
 }
 {
+  const s = panel.section("声音");
+  panel.checkbox(s, "静音", () => params.sound.muted, (v) => {
+    params.sound.muted = v;
+    sound.applyVolumes();
+  });
+  panel.slider(s, "氛围", 0, 1, 0.01, () => params.sound.ambient, (v) => {
+    params.sound.ambient = v;
+    sound.applyVolumes();
+  });
+  panel.slider(s, "音效", 0, 1, 0.01, () => params.sound.sfx, (v) => {
+    params.sound.sfx = v;
+    sound.applyVolumes();
+  });
+  panel.param(s, "根音 MIDI", "sound.rootMidi", 48, 74, 1);
+  panel.param(s, "钟声最短", "sound.chimeMin", 1, 30, 0.5);
+  panel.param(s, "钟声最长", "sound.chimeMax", 2, 60, 0.5);
+  panel.buttons(s, [["试：流星", () => sound.meteor()], ["试：戳", () => sound.poke()], ["试：撞", () => sound.bounce(4)], ["试：写字", () => sound.glyph()], ["试：发送", () => sound.send()], ["试：闪光", () => sound.shimmer()]]);
+}
+{
   const s = panel.section("后期");
   panel.param(s, "曝光", "post.exposure", 0.3, 2.5);
   panel.param(s, "辉光", "post.bloomStrength", 0, 2);
@@ -207,7 +429,8 @@ const fpsEl = document.getElementById("fps")!;
 setInterval(() => {
   const c = app.stage.cam;
   const st = app.world.state;
-  fpsEl.textContent = `fps ${app.fps.toFixed(0)} · 倾斜 ${c.tilt.x.toFixed(0)}°/${c.tilt.y.toFixed(0)}° · 太阳 ${st.tone.sunAltDeg.toFixed(1)}° · 月相 ${(st.phase.illuminated * 100).toFixed(0)}% · ${app.world.location.label}`;
+  const ms = (v: number) => (Number.isFinite(v) ? `${Math.round(v)}` : "—");
+  fpsEl.textContent = `延迟 p50（ms）反应 ${ms(median(lat.reflex))} · 表情 ${ms(median(lat.emotion))} · 首字 ${ms(median(lat.text))} · 完 ${ms(median(lat.done))} ｜ fps ${app.fps.toFixed(0)} · 画质 ${app.stage.quality} 档 · 倾斜 ${c.tilt.x.toFixed(0)}°/${c.tilt.y.toFixed(0)}° · 太阳 ${st.tone.sunAltDeg.toFixed(1)}° · 月相 ${(st.phase.illuminated * 100).toFixed(0)}% · ${app.world.location.label}`;
 }, 500);
 
 // ---------- 无头验收工具 ----------
@@ -218,23 +441,31 @@ async function snapSave(dir = "", name = `snap-${Date.now()}`): Promise<string> 
 }
 
 /** 逐帧录制：固定时钟，每帧截图 POST 到 /__snap?dir=<seq>；然后 `python3 scripts/make-gif.py <seq>` 合成。 */
-async function recordGif(seq = "clip", opts: { fps?: number; seconds?: number; w?: number; h?: number; shake?: boolean; script?: (t: number) => void } = {}) {
+async function recordGif(seq = "clip", opts: { fps?: number; seconds?: number; w?: number; h?: number; shake?: boolean; grain?: number; realtime?: boolean; script?: (t: number) => void | Promise<void> } = {}) {
   const fps = opts.fps ?? 15;
   const seconds = opts.seconds ?? 8;
+  // 胶片颗粒每帧都不一样，GIF / 视频压不动（24 MB → 几 MB）：录制时默认关掉，画面本身不受影响
+  const grain = params.post.grain;
+  params.post.grain = opts.grain ?? 0;
   app.stage.setFixedSize({ w: opts.w ?? 540, h: opts.h ?? 960, pr: 1 });
   app.stage.cam.autoShake = opts.shake ?? true;
   const dt = 1 / fps;
   const n = Math.round(seconds * fps);
   let t = 0;
+  // 按真实时间走（默认）：有些反应用的是真实时间的计时器（戳完 460ms 变开心），录得太快节奏会走样
+  const start = performance.now();
   for (let i = 0; i < n; i++) {
-    opts.script?.(t);
+    await opts.script?.(t);
     const sub = Math.max(1, Math.round(60 / fps));
     for (let k = 0; k < sub; k++) app.step(dt / sub);
     t += dt;
     await snapSave(seq, `frame-${String(i + 1).padStart(4, "0")}`);
+    const ahead = t * 1000 - (performance.now() - start);
+    if ((opts.realtime ?? true) && ahead > 1) await new Promise((r) => setTimeout(r, ahead));
   }
   app.stage.cam.autoShake = false;
   app.stage.setFixedSize(null);
+  params.post.grain = grain;
   return `snaps/${seq}/ ${n} 帧 → python3 scripts/make-gif.py ${seq}`;
 }
 
@@ -245,19 +476,38 @@ declare global {
     __scene: (name: string) => void;
     __act: (name: Action, intensity?: number) => void;
     __step: (seconds?: number) => void;
+    __pause: (on?: boolean) => boolean;
+    __settle: (seconds?: number) => Promise<void>;
     __snapSave: typeof snapSave;
     __recordGif: typeof recordGif;
     __tilt: (xDeg: number, yDeg: number) => void;
     __interact: MoonInteraction;
     __life: Behaviors;
+    __chat: ChatView;
+    __demo: DemoBrain;
+    __sound: SoundEngine;
   }
 }
+window.__sound = sound;
+window.__chat = chat;
+window.__demo = demo;
 window.__interact = interact;
 window.__life = life;
 window.__app = app;
 window.__params = params;
-window.__scene = (name) => void applyScene(app, name);
+window.__scene = (name) => void applyScene(app, name, sceneCtx);
 window.__act = (name, intensity = 0.7) => app.moon.playAction(name, intensity, "manual");
+window.__pause = (on = true) => (app.paused = on);
+/** 快进到某一刻并渲染一帧（对照页「定格」、截图用）：分小步推进，让异步的字形排版跟得上 */
+window.__settle = async (seconds = 1) => {
+  app.paused = true;
+  const n = Math.ceil(seconds / 0.1);
+  for (let i = 0; i < n; i++) {
+    for (let k = 0; k < 6; k++) app.step(1 / 60);
+    await new Promise((r) => setTimeout(r, 4));
+  }
+  app.stage.render(0);
+};
 window.__step = (seconds = 1) => {
   const n = Math.ceil(seconds * 60);
   for (let i = 0; i < n; i++) app.step(1 / 60);
