@@ -47,8 +47,8 @@ const defaults = {
     /** 白天星星和银河还剩多少（0 = 看不见）。 */
     dayStarVisibility: 0.0,
     milkyWay: {
-      /** 整体亮度增益（线性）。 */
-      gain: 1.8,
+      /** 整体亮度增益（线性）。2026-09-30 用户：银河和背景星空亮一点（1.8 → 2.4）。 */
+      gain: 2.4,
       /** 黑位：原图的背景雾偏灰，先减掉这么多再放大（线性）。 */
       black: 0.035,
       /** 对比（伽马）：>1 让暗处更暗、银河带更突出。 */
@@ -68,7 +68,7 @@ const defaults = {
       /** 自动曝光（像眼睛适应暗处）：画面里这段银河偏暗时（比如秋冬凌晨头顶是很淡的英仙臂），先提亮再上对比。
        *  target = 画面里银河较亮处（p90）提到多亮（线性，未上对比前）；max = 最多提亮几倍。看到银心那段时不提亮。 */
       auto: true,
-      autoTarget: 0.18,
+      autoTarget: 0.2,
       autoMax: 4.5,
     },
     /** 星表里的真实恒星（≤ 6 等，约 5000 颗）。 */
@@ -78,9 +78,9 @@ const defaults = {
       /** 点的大小（像素，1 倍屏）：最亮的星与最暗的星。 */
       sizeBright: 7.5,
       sizeFaint: 1.1,
-      /** 亮度：最亮 / 最暗。 */
-      brightBright: 5.0,
-      brightFaint: 0.28,
+      /** 亮度：最亮 / 最暗。2026-09-30 用户：背景星空亮一点（5.0 / 0.28 → 6.0 / 0.42）。 */
+      brightBright: 6.0,
+      brightFaint: 0.42,
       /** 颜色饱和（按 B-V 色指数上色的程度）。 */
       colorSaturation: 0.55,
       twinkle: 0.35,
@@ -89,9 +89,10 @@ const defaults = {
     },
     /** 程序化补星：让画面像概念图那样密。depth = 屏幕后方距离；parallax 同上；warm = 暖金色星的比例。 */
     fill: [
-      { count: 2600, depth: 12, size: 1.0, brightness: 0.45, warm: 0.12, parallax: 0.12 },
-      { count: 900, depth: 6, size: 1.7, brightness: 0.7, warm: 0.35, parallax: 0.3 },
-      { count: 140, depth: 3, size: 3.2, brightness: 1.1, warm: 0.55, parallax: 0.55 },
+      // 2026-09-30 用户：背景星空亮一点、附近的「尘埃」暗一点 → 远的两层 0.45 / 0.7 → 0.6 / 0.8，最近那层 1.1 → 0.7
+      { count: 2600, depth: 12, size: 1.0, brightness: 0.6, warm: 0.12, parallax: 0.12 },
+      { count: 900, depth: 6, size: 1.7, brightness: 0.8, warm: 0.35, parallax: 0.3 },
+      { count: 140, depth: 3, size: 3.2, brightness: 0.7, warm: 0.55, parallax: 0.55 },
     ],
     fillTwinkle: 0.45,
     fillTwinkleSpeed: 1.2,
@@ -121,15 +122,16 @@ const defaults = {
 
   // ───────────── 最近处的虚化光斑（景深） ─────────────
   bokeh: {
-    count: 20,
+    /** 2026-09-30 用户：附近的「尘埃」暗一点（20 个 → 14 个，不透明度 0.06–0.2 → 0.035–0.11） */
+    count: 14,
     /** 深度：负 = 屏幕后方，正 = 玻璃前面（离你更近，倾斜时反向移动）。 */
     depthMin: -0.25,
     depthMax: 0.55,
     /** 大小（单位）与不透明度范围。 */
     sizeMin: 0.05,
     sizeMax: 0.2,
-    opacityMin: 0.06,
-    opacityMax: 0.2,
+    opacityMin: 0.035,
+    opacityMax: 0.11,
     color: "#ffcf88",
     /** 光斑边缘的一圈亮环（真实镜头的 bokeh 有）：0 = 纯软圆。 */
     ring: 0.12,
