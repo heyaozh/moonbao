@@ -32,7 +32,7 @@ const frag = /* glsl */ `
   uniform vec3 uLit, uShade, uSSSColor, uRimColor, uSelfGlowColor;
   // 脸
   uniform float uEyeSpacing, uEyeY, uEyeW, uEyeH, uHlX, uHlY, uHlSize, uHl, uGazeRange;
-  uniform float uHl2, uHl2X, uHl2Y, uHl2Size, uFaceOn;
+  uniform float uHl2, uHl2X, uHl2Y, uHl2Size, uFaceOn, uHatch;
   uniform float uMouthBelow, uMouthWidth, uMouthTh, uSmileDepth, uCat;
   uniform float uBlushX, uBlushBelow, uBlushR, uBlushFeather, uBlushOpacity, uBlushAspect;
   uniform vec3 uEyeColor, uMouthColor, uMouthInner, uTongue, uBlushColor;
@@ -201,6 +201,16 @@ const frag = /* glsl */ `
       float bd = min(length((p - vec2(-bc.x, bc.y)) * bs), length((p - bc) * bs));
       float blush = uBlushOpacity * (1.0 - sstep(uBlushR * (1.0 - uBlushFeather), uBlushR, bd));
       col = mix(col, uBlushColor * max(lightLevel, 0.4) * 0.9, blush * 0.9);
+      // 害羞的斜线腮红 ///：腮红里几道短斜线（深一点的粉）
+      if (uHatch > 0.001) {
+        vec2 lc = p.x < 0.0 ? p - vec2(-bc.x, bc.y) : p - bc;
+        float w = uBlushR * 0.36;
+        float sl = lc.x + lc.y * 0.6;
+        float dl = abs(fract(sl / w + 0.5) - 0.5) * w;
+        float line = 1.0 - sstep(uBlushR * 0.055 - aa, uBlushR * 0.055 + aa, dl);
+        float box = (1.0 - sstep(uBlushR * 0.38, uBlushR * 0.46, abs(lc.y))) * (1.0 - sstep(uBlushR * 0.78, uBlushR * 0.9, abs(lc.x)));
+        col = mix(col, uBlushColor * 0.62 * max(lightLevel, 0.4), line * box * uHatch);
+      }
       // 嘴
       vec2 mp = p - vec2(gaze.x * 0.5, uEyeY - uMouthBelow + gaze.y * 0.4);
       float mw = uMouthWidth * 0.5 * uMWidth;
@@ -309,6 +319,7 @@ export class MoonBody {
         uHl: { value: 1 },
         uHl2: { value: 0 },
         uFaceOn: { value: 1 },
+        uHatch: { value: 0 },
         uHl2X: { value: 0.3 },
         uHl2Y: { value: -0.3 },
         uHl2Size: { value: 0.13 },
@@ -449,12 +460,13 @@ export class MoonBody {
     u.uHlY.value = F.highlightY;
     u.uHlSize.value = F.highlightSize;
     u.uHl.value = F.highlight;
-    u.uHl2.value = F.highlight2;
+    u.uHl2.value = Math.max(F.highlight2, f.sparkle);
     u.uFaceOn.value = F.visible;
     u.uHl2X.value = F.highlight2X;
     u.uHl2Y.value = F.highlight2Y;
     u.uHl2Size.value = F.highlight2Size;
-    u.uCat.value = F.catMouth;
+    u.uCat.value = Math.max(F.catMouth, f.cat);
+    u.uHatch.value = f.hatch;
     u.uBlushAspect.value = F.blushAspect;
     u.uGazeRange.value = F.gazeRange;
     u.uMouthBelow.value = F.mouthBelow;

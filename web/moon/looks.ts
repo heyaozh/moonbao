@@ -18,10 +18,20 @@ export interface Look {
 export const LOOKS: Record<string, Look> = {
   // ───────── 五官 ─────────
   current: {
-    label: "现在",
+    label: "默认",
     kind: "face",
-    note: "参考图比例：豆眼 + 一个小高光、微笑弧、圆腮红",
+    note: "2026-09-30 定的默认：婴儿比例的五官 + 介于原样与奶黄之间的月面 + 一点点灯笼的光",
     params: {},
+  },
+  classic: {
+    label: "旧默认",
+    kind: "face",
+    note: "2026-09-30 之前的默认：参考图比例的五官、NASA 柔和月面 + 较清楚的小坑",
+    params: {
+      face: { eyeY: 0, eyeSpacing: 0.66, eyeW: 0.068, eyeH: 0.078, highlightSize: 0.26, mouthBelow: 0.17, mouthWidth: 0.145, smileDepth: 0.05, blushX: 0.44, blushBelow: 0.12, blushRadius: 0.13 },
+      moon: { litColor: "#ffd2a0", textureContrast: 1.15, craterDetail: 0.7, bumpStrength: 0.5, selfGlow: 0.035, volume: 0.5, limbDarkening: 0.28, rim: 0.38, brightness: 0.78 },
+      light: { haloColor: "#ffe9c8", haloScale: 2.3, haloOpacity: 0.5 },
+    },
   },
   baby: {
     label: "婴儿比例",

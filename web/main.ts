@@ -123,12 +123,13 @@ const sendProfile = () => {
   if (app.client.connected) app.client.send({ type: "profile", userName: profile.userName || undefined, moonName: profile.moonName || undefined });
 };
 const settings = new SettingsSheet(profile, () => app.world.location.label);
+settings.onOpenChange = (open) => ui.settingsBtn.classList.toggle("open", open);
 /** 界面文字跟着设置里的语言走（默认跟系统语言；用户主要是英文） */
 function applyLang() {
   const zh = uiLang(profile) === "zh";
   if (!onboarding?.active) ui.input.placeholder = zh ? "想和月亮说些什么…" : "Say something to the moon…";
   ui.voiceBtn.setAttribute("aria-label", zh ? "按住说话" : "Hold to talk");
-  ui.settingsBtn.setAttribute("aria-label", zh ? "设置" : "Settings");
+  ui.settingsBtn.setAttribute("aria-label", zh ? "菜单" : "Menu");
   const g = document.querySelector("#gyroBtn span");
   if (g) g.textContent = zh ? "倾斜手机，看看盒子里面" : "Tilt your phone to look inside";
   document.documentElement.lang = zh ? "zh-CN" : "en";
@@ -187,7 +188,8 @@ app.bus.on("user:barge", () => {
 app.bus.on("engine:reflex", (r) => {
   if (sentAt) pushLat("reflex", performance.now() - sentAt);
   app.moon.setEmotion(r.valence, r.arousal);
-  app.moon.flashExpr(r.expr as any, 2.4);
+  // 服务端可能比前端新（多了表情名）：认识的才做
+  if ((EXPR_NAMES as string[]).includes(r.expr)) app.moon.flashExpr(r.expr as (typeof EXPR_NAMES)[number], 2.4);
   app.moon.playAction(r.action, r.intensity, "brain");
   if (r.confused) chat.thinking.showQuestion(true);
 });
