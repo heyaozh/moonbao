@@ -249,6 +249,8 @@ const defaults = {
   // ───────────── 脸（画在球面上，跟着月亮一起转） ─────────────
   // 所有长度都是半径的倍数；比例按用户参考图（docs/design.md §2）。
   face: {
+    /** 画不画脸（0 = 光月亮：给 AI 出图当底图用，或以后画画模式看整个月面） */
+    visible: 1,
     eyeSpacing: 0.66,
     /** 眼睛中心的高度（相对球心，负 = 偏下）。 */
     eyeY: 0.0,
@@ -261,6 +263,11 @@ const defaults = {
     highlightY: 0.38,
     highlightSize: 0.26,
     highlight: 0.85,
+    /** 第二个高光（小一点、在右下 = 闪亮的「星星眼」）：强度（相对第一个；0 = 关）、位置、大小。 */
+    highlight2: 0,
+    highlight2X: 0.32,
+    highlight2Y: -0.34,
+    highlight2Size: 0.13,
     /** 视线偏移幅度（眼睛在脸上滑多远）。 */
     gazeRange: 0.06,
     /** 嘴：中心在眼睛下方多远、宽、线粗、微笑弧的深度。 */
@@ -268,6 +275,8 @@ const defaults = {
     mouthWidth: 0.145,
     mouthThickness: 0.021,
     smileDepth: 0.05,
+    /** 猫嘴 ω（0 = 普通的微笑弧，1 = ω）；张嘴、o 型、波浪嘴时自动用原来的形状。 */
+    catMouth: 0,
     mouthColor: "#2a1618",
     mouthInner: "#7a2c33",
     tongueColor: "#ee8a92",
@@ -275,6 +284,8 @@ const defaults = {
     blushX: 0.44,
     blushBelow: 0.12,
     blushRadius: 0.13,
+    /** 腮红的宽高比（1 = 圆，>1 = 横向的椭圆）。 */
+    blushAspect: 1,
     blushColor: "#ff7488",
     blushBase: 0.62,
     blushMax: 0.85,

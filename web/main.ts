@@ -25,8 +25,11 @@ import { EXPR_LABELS, EXPR_NAMES } from "./moon/expressions";
 import { MoonInteraction } from "./moon/interact";
 import { GazeWisp } from "./moon/wisp";
 import { params } from "./moon/params";
+import { applyLooks, LOOKS } from "./moon/looks";
 
 const q = new URLSearchParams(location.search);
+// 形象对比：?look=baby 或 ?look=baby,mochi（见 web/moon/looks.ts）
+if (q.get("look")) applyLooks(q.get("look")!.split(","));
 // 用户在设置里调过的偏好（声音、画面）先盖到 params 上，再建场景
 loadUserSettings();
 const profile = loadProfile();
@@ -302,6 +305,20 @@ if (q.get("panel") === "off") panel.root.hidden = true;
   panel.checkbox(s, "星空左右镜像", () => params.sky.mirrorEastWest, (v) => (params.sky.mirrorEastWest = v));
 }
 {
+  // 形象：选一个脸 + 一个月面（可以叠）；「原样」两个都还原
+  const lk = panel.section("形象");
+  const cur = { face: "current", body: "" };
+  const lookNow = () => applyLooks([cur.face, cur.body].filter(Boolean));
+  panel.buttons(
+    lk,
+    [
+      ["原样", () => ((cur.face = "current"), (cur.body = ""), lookNow())],
+      ...Object.entries(LOOKS)
+        .filter(([k]) => k !== "current")
+        .map(([k, L]) => [L.label, () => (L.kind === "body" ? (cur.body = k) : (cur.face = k), lookNow())] as [string, () => void]),
+    ],
+    true
+  );
   const s = panel.section("表情");
   panel.buttons(s, [["自动", () => (app.moon.exprOverride = null)], ...EXPR_NAMES.map((n) => [EXPR_LABELS[n], () => (app.moon.exprOverride = n)] as [string, () => void])], true);
   const a = panel.section("动作");
