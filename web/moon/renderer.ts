@@ -141,6 +141,18 @@ export class MoonRenderer implements CharacterRenderer {
     const home = this.chatMode ? P.moon.chatHome : P.moon.home;
     const R = P.moon.radius;
     const pose = this.actions.update(dt, { halfW: cam.halfW, radius: R, moonDepth: home.depth, eyeDistance: cam.eyeZ });
+    // 双击特写「你点的那一点」：不再固定地转一只眼给你看，而是把那一点转到正对你、居中
+    let qFocusW: THREE.Quaternion | null = null;
+    if (this.focusLocal) {
+      if (pose.closeup > 0) {
+        pose.yaw = 0;
+        pose.dx = 0;
+        pose.gazeX = 0;
+        pose.secondEye = 1;
+        const qf = this.tmpQ4.setFromUnitVectors(this.focusLocal, Z);
+        qFocusW = this.tmpQ5.identity().slerp(qf, pose.closeup);
+      } else if (this.actions.current !== "lean_in") this.focusLocal = null;
+    }
 
     // 待机漂浮（噪声，不是正弦）
     const ag = 1 + arousal * P.motion.driftArousalGain;
@@ -179,13 +191,29 @@ export class MoonRenderer implements CharacterRenderer {
     const viewer = cam.camera.position;
     const center = this.body.root.position;
     const toViewer = this.tmpA.copy(viewer).sub(center).normalize();
+    this.lookGaze.set(0, 0);
     if (this.lookTarget && this.lookWeight > 0) {
       const toT = this.tmpB.copy(this.lookTarget).sub(center).normalize();
-      toViewer.lerp(toT, clamp(this.lookWeight, 0, 1)).normalize();
+      const want = this.tmpC.copy(toViewer).lerp(toT, clamp(this.lookWeight, 0, 1)).normalize();
+      // 头最多转 lookMaxDeg（脸一直朝着你这边）；剩下的交给眼睛——像人扭头看东西：头带一点，眼睛补到位
+      const ang = toViewer.angleTo(want);
+      const maxA = deg(P.motion.lookMaxDeg);
+      if (ang > maxA) {
+        const axis = this.tmpD.crossVectors(toViewer, want);
+        if (axis.lengthSq() > 1e-10) {
+          axis.normalize();
+          const head = this.tmpE3.copy(toViewer).applyAxisAngle(axis, maxA);
+          const rest = Math.min(1, (ang - maxA) / deg(P.motion.lookEyeRangeDeg));
+          this.lookGaze.set(want.x - head.x, want.y - head.y);
+          if (this.lookGaze.lengthSq() > 1e-10) this.lookGaze.normalize().multiplyScalar(0.35 + 0.65 * rest);
+          toViewer.copy(head);
+        } else toViewer.copy(want);
+      } else toViewer.copy(want);
     }
     const qLook = lookRotation(toViewer, this.tmpQ);
     const qPose = this.tmpQ2.setFromEuler(this.tmpE.set(-pose.pitch + this.glanceS.y, this.glanceS.x, pose.roll + driftRoll, "YXZ"));
     this.rot.target.copy(qLook).multiply(qPose);
+    if (qFocusW) this.rot.target.multiply(qFocusW);
     this.rot.omega = P.motion.rotOmega;
     this.rot.zeta = P.motion.rotZeta;
     this.rot.step(dt);
@@ -213,8 +241,8 @@ export class MoonRenderer implements CharacterRenderer {
     const fp: FaceParams = exprParams(name);
     // 在听：视线稍微前倾、专注一点
     if (this.listening && !pose.expr && !this.exprOverride) fp.eyeScale *= 1.04;
-    fp.gazeX += pose.gazeX;
-    fp.gazeY -= pose.gazeY;
+    fp.gazeX += pose.gazeX + this.lookGaze.x;
+    fp.gazeY -= pose.gazeY + this.lookGaze.y;
     this.face.setTarget(fp);
     const face = this.face.update(dt);
     // 眨眼：只作用在「睁着的圆眼」上；^ ^ / >< / @ 不眨
@@ -247,6 +275,13 @@ export class MoonRenderer implements CharacterRenderer {
   }
 
   /** 手势 / 小日子给的瞬时表情（秒），优先级最高。 */
+  /** 双击特写：localDir = 你点的那一点（月亮自己坐标系里的方向），飞到玻璃前把它转到正对你 */
+  closeUpAt(localDir: THREE.Vector3) {
+    this.focusLocal = localDir.clone().normalize();
+    this.playAction("lean_in", 1, "manual");
+    this.flashExpr("surprised", 0.5);
+  }
+
   flashExpr(name: ExprName, seconds: number) {
     this.flash = { name, until: this.t + seconds };
   }
@@ -275,6 +310,15 @@ export class MoonRenderer implements CharacterRenderer {
 
   private tmpA = new THREE.Vector3();
   private tmpB = new THREE.Vector3();
+  private tmpC = new THREE.Vector3();
+  private tmpQ4 = new THREE.Quaternion();
+  private tmpQ5 = new THREE.Quaternion();
+  /** 双击特写的那一点（月亮自己的坐标系里的方向）；null = 老样子的特写 */
+  private focusLocal: THREE.Vector3 | null = null;
+  private tmpD = new THREE.Vector3();
+  private tmpE3 = new THREE.Vector3();
+  /** 头转不到的那部分注视，交给眼睛（屏幕方向，长度 0..1） */
+  private lookGaze = new THREE.Vector2();
   private tmpQ = new THREE.Quaternion();
   private tmpQ2 = new THREE.Quaternion();
   private tmpQ3 = new THREE.Quaternion();

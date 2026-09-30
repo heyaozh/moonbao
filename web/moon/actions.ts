@@ -32,6 +32,8 @@ export interface Pose {
   secondEye: number;
   /** 本帧要触发一次压扁脉冲 */
   squashPulse: boolean;
+  /** 特写的在位程度 0..1（双击特写「你点的那一点」时，渲染器用它把那一点转到正对你） */
+  closeup: number;
   /** 腮红加深量 0..1（null = 由情绪决定） */
   blush: number | null;
   done: boolean;
@@ -49,7 +51,7 @@ export interface ActionCtx {
 
 export const IDLE_POSE: Pose = {
   dx: 0, dy: 0, dz: 0, yaw: 0, pitch: 0, roll: 0, bodyYaw: 0,
-  glow: null, gazeX: 0, gazeY: 0, expr: null, lidCap: 1, secondEye: 1, squashPulse: false, blush: null, done: false,
+  glow: null, gazeX: 0, gazeY: 0, expr: null, lidCap: 1, secondEye: 1, squashPulse: false, blush: null, closeup: 0, done: false,
 };
 
 type ActionFn = (t: number, k: number, ctx: ActionCtx, pose: Pose) => void;
@@ -86,6 +88,7 @@ const fns: Record<Action, ActionFn> = {
       p.gazeX = -0.3 * e.w;
       p.secondEye = 1 - 0.7 * e.w;
       p.expr = e.w > 0.5 ? "surprised" : null;
+      p.closeup = e.w;
       p.done = e.done;
       return;
     }
