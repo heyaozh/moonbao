@@ -214,8 +214,9 @@ const defaults = {
     selfGlowColor: "#fff1d6",
     /** 真实月面贴图混入程度（0 = 光面，1 = NASA 柔和贴图，用户偏好样板）。 */
     surfaceRealism: 1,
-    albedoUrl: "/moon/nasa_soft05_albedo_2k.jpg",
-    heightUrl: "/moon/nasa_soft05_height_1k.png",
+    /** 月面贴图（相对站点根目录） */
+    albedoUrl: "moon/nasa_soft05_albedo_2k.jpg",
+    heightUrl: "moon/nasa_soft05_height_1k.png",
     /** 贴图对比（1 = 原样，<1 更柔）。贴图按近侧平均反照率 0.22 归一化（2026-09-26 实测）。 */
     textureContrast: 0.8,
     /** 高程转法线的凹凸强度（0 = 只有颜色没有起伏）。 */

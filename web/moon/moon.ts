@@ -7,6 +7,7 @@ import * as THREE from "three";
 import { bakeCraters } from "./craters";
 import type { FaceParams } from "./expressions";
 import { params } from "./params";
+import { asset } from "../asset";
 
 const vert = /* glsl */ `
   varying vec3 vObj;
@@ -359,14 +360,14 @@ export class MoonBody {
       fragmentShader: frag,
     });
     const loader = new THREE.TextureLoader();
-    loader.load(P.moon.albedoUrl, (t) => {
+    loader.load(asset(P.moon.albedoUrl), (t) => {
       t.colorSpace = THREE.SRGBColorSpace;
       t.wrapS = THREE.RepeatWrapping;
       t.anisotropy = 8;
       mat.uniforms.uAlbedo.value = t;
       this.texReady.albedo = true;
     });
-    loader.load(P.moon.heightUrl, (t) => {
+    loader.load(asset(P.moon.heightUrl), (t) => {
       t.wrapS = THREE.RepeatWrapping;
       mat.uniforms.uHeight.value = t;
       this.texReady.height = true;
