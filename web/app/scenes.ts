@@ -8,6 +8,7 @@ import { FONT_CANDIDATES, fontState, type FontName } from "../chat/glyphs";
 import { EXPR_NAMES, type ExprName } from "../moon/expressions";
 import type { Behaviors } from "../moon/behaviors";
 import type { MoonInteraction } from "../moon/interact";
+import type { MoonPaint } from "../moon/paint";
 import { params } from "../moon/params";
 import type { Onboarding } from "../ui/onboarding";
 import type { App } from "./app";
@@ -18,6 +19,7 @@ export interface SceneCtx {
   life: Behaviors;
   onboarding?: Onboarding;
   interact?: MoonInteraction;
+  paint?: MoonPaint;
 }
 
 export interface Scene {
@@ -35,6 +37,7 @@ let fontBeforeCompare: FontName | null = null;
 
 function base(app: App, x: SceneCtx, opts: { keepChat?: boolean } = {}) {
   if (x.onboarding?.active) x.onboarding.finish();
+  if (x.paint?.active) x.paint.exit();
   if (fontBeforeCompare) {
     fontState.en = fontBeforeCompare;
     fontBeforeCompare = null;
@@ -146,6 +149,14 @@ export const SCENES: Record<string, Scene> = {
       d.schedule(7.0, () => it.twirl(1));
       d.schedule(7.5, () => it.twirl(0.8));
       d.schedule(12.6, () => app.moon.flashExpr("laugh", 1.4));
+    },
+  },
+  paint: {
+    label: "画月亮",
+    apply(app, x) {
+      base(app, x);
+      params.light.phaseDeg = 0;
+      x.paint?.enter();
     },
   },
   fonts: {
