@@ -492,3 +492,17 @@ body {
   opacity: 0.35;
   pointer-events: none;
 }
+
+/* 菜单按钮：星星状齿轮，点一下转半格（像拧开） */
+.stargear svg {
+  transition: transform 0.6s cubic-bezier(0.3, 1.4, 0.5, 1), filter 0.3s ease;
+  filter: drop-shadow(0 0 4px rgba(255, 236, 200, 0.35));
+}
+.stargear:hover svg,
+.stargear.open svg {
+  transform: rotate(22.5deg);
+  filter: drop-shadow(0 0 7px rgba(255, 236, 200, 0.6));
+}
+@media (prefers-reduced-motion: reduce) {
+  .stargear svg { transition: none; }
+}

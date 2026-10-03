@@ -189,7 +189,7 @@ const defaults = {
     home: { x: 0, y: 0.82, depth: 1.3 },
     chatHome: { x: -0.98, y: 0.95, depth: 2.6 },
     /** 月面亮部颜色 / 暗部（地照）颜色。 */
-    litColor: "#ffd2a0",
+    litColor: "#ffd7a5",
     shadeColor: "#8d8ca3",
     /** 明暗交界的柔和度（0 = 刀切，0.4 = 很柔）。用户：月相的分界线要柔和。 */
     terminatorSoftness: 0.26,
@@ -199,17 +199,17 @@ const defaults = {
     sss: 0.35,
     sssColor: "#ff9a6b",
     /** 亮面的 HDR 亮度（>1 会被辉光轻轻吃到，像自己在发光）。 */
-    brightness: 0.78,
+    brightness: 0.82,
     /** 边缘泛光（fresnel）强度与颜色。 */
-    rim: 0.38,
+    rim: 0.46,
     /** 边缘暗角（月面靠边稍暗，更有球的体积感）。 */
-    limbDarkening: 0.28,
+    limbDarkening: 0.2,
     /** 体积感：不管月相，额外一盏很弱的「左上方」主光，让球有立体感（概念图右下边缘更暗）。0 = 关。 */
-    volume: 0.5,
+    volume: 0.58,
     volumeDir: { x: -0.55, y: 0.6, z: 0.6 },
     rimColor: "#ffe2a8",
     /** 表面自发光（暖白）。2026-09-23 拍板：发光靠光晕 + 地照，表面自发光封顶 0.2。 */
-    selfGlow: 0.035,
+    selfGlow: 0.09,
     selfGlowMax: 0.2,
     selfGlowColor: "#fff1d6",
     /** 真实月面贴图混入程度（0 = 光面，1 = NASA 柔和贴图，用户偏好样板）。 */
@@ -217,11 +217,11 @@ const defaults = {
     albedoUrl: "/moon/nasa_soft05_albedo_2k.jpg",
     heightUrl: "/moon/nasa_soft05_height_1k.png",
     /** 贴图对比（1 = 原样，<1 更柔）。贴图按近侧平均反照率 0.22 归一化（2026-09-26 实测）。 */
-    textureContrast: 1.15,
+    textureContrast: 0.8,
     /** 高程转法线的凹凸强度（0 = 只有颜色没有起伏）。 */
-    bumpStrength: 0.5,
+    bumpStrength: 0.3,
     /** 程序化小坑的强度（0 = 纯 NASA 柔和样板；概念图里的月亮坑更清楚）。 */
-    craterDetail: 0.7,
+    craterDetail: 0.4,
     /** 脸在月面上的位置（月面经纬度，度）：挑一块月海不打架的地方。 */
     faceLon: 12,
     faceLat: -6,
@@ -237,9 +237,9 @@ const defaults = {
     earthshineMin: 0.05,
     earthshineMax: 0.11,
     /** 光晕：大小（半径的倍数）、不透明度、颜色；glow 状态（dim / brighten）会乘上去。 */
-    haloScale: 2.3,
-    haloOpacity: 0.5,
-    haloColor: "#ffe9c8",
+    haloScale: 2.45,
+    haloOpacity: 0.58,
+    haloColor: "#ffe6c0",
     glowDefault: 1.0,
     glowMin: 0.35,
     glowMax: 1.6,
@@ -249,32 +249,45 @@ const defaults = {
   // ───────────── 脸（画在球面上，跟着月亮一起转） ─────────────
   // 所有长度都是半径的倍数；比例按用户参考图（docs/design.md §2）。
   face: {
-    eyeSpacing: 0.66,
+    // 2026-09-30 用户定的默认形象：「婴儿比例眼睛 + 现在和奶黄软糯之间，适当加一点点的发光灯笼（光稍微暗一点）」。
+    // 原来的默认留在 web/moon/looks.ts 的 classic（?look=classic）。
+    /** 画不画脸（0 = 光月亮：给 AI 出图当底图用，或以后画画模式看整个月面） */
+    visible: 1,
+    eyeSpacing: 0.74,
     /** 眼睛中心的高度（相对球心，负 = 偏下）。 */
-    eyeY: 0.0,
+    eyeY: -0.1,
     /** 眼睛半宽 / 半高。 */
-    eyeW: 0.068,
-    eyeH: 0.078,
+    eyeW: 0.076,
+    eyeH: 0.088,
     eyeColor: "#17141d",
     /** 眼睛高光（小白点）：位置（相对眼睛半径）、大小、亮度。参考图是哑光的，概念图有小高光。 */
     highlightX: -0.32,
     highlightY: 0.38,
-    highlightSize: 0.26,
+    highlightSize: 0.3,
     highlight: 0.85,
+    /** 第二个高光（小一点、在右下 = 闪亮的「星星眼」）：强度（相对第一个；0 = 关）、位置、大小。 */
+    highlight2: 0,
+    highlight2X: 0.32,
+    highlight2Y: -0.34,
+    highlight2Size: 0.13,
     /** 视线偏移幅度（眼睛在脸上滑多远）。 */
     gazeRange: 0.06,
     /** 嘴：中心在眼睛下方多远、宽、线粗、微笑弧的深度。 */
-    mouthBelow: 0.17,
-    mouthWidth: 0.145,
+    mouthBelow: 0.12,
+    mouthWidth: 0.11,
     mouthThickness: 0.021,
-    smileDepth: 0.05,
+    smileDepth: 0.045,
+    /** 猫嘴 ω（0 = 普通的微笑弧，1 = ω）；张嘴、o 型、波浪嘴时自动用原来的形状。 */
+    catMouth: 0,
     mouthColor: "#2a1618",
     mouthInner: "#7a2c33",
     tongueColor: "#ee8a92",
     /** 腮红：离中轴、在眼下多远、半径、颜色、底值与上限、羽化。 */
-    blushX: 0.44,
-    blushBelow: 0.12,
-    blushRadius: 0.13,
+    blushX: 0.47,
+    blushBelow: 0.09,
+    blushRadius: 0.15,
+    /** 腮红的宽高比（1 = 圆，>1 = 横向的椭圆）。 */
+    blushAspect: 1,
     blushColor: "#ff7488",
     blushBase: 0.62,
     blushMax: 0.85,

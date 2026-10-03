@@ -32,8 +32,9 @@ const frag = /* glsl */ `
   uniform vec3 uLit, uShade, uSSSColor, uRimColor, uSelfGlowColor;
   // 脸
   uniform float uEyeSpacing, uEyeY, uEyeW, uEyeH, uHlX, uHlY, uHlSize, uHl, uGazeRange;
-  uniform float uMouthBelow, uMouthWidth, uMouthTh, uSmileDepth;
-  uniform float uBlushX, uBlushBelow, uBlushR, uBlushFeather, uBlushOpacity;
+  uniform float uHl2, uHl2X, uHl2Y, uHl2Size, uFaceOn, uHatch;
+  uniform float uMouthBelow, uMouthWidth, uMouthTh, uSmileDepth, uCat;
+  uniform float uBlushX, uBlushBelow, uBlushR, uBlushFeather, uBlushOpacity, uBlushAspect;
   uniform vec3 uEyeColor, uMouthColor, uMouthInner, uTongue, uBlushColor;
   uniform vec2 uOpen;       // 左右眼睁开
   uniform float uHappy, uSqueeze, uDizzy, uClosed, uEyeScale, uSad;
@@ -113,6 +114,11 @@ const frag = /* glsl */ `
     float hv = (1.0 - uHappy) * (1.0 - uSqueeze) * (1.0 - uDizzy) * (1.0 - uClosed) * sstep(0.35, 0.8, open);
     vec2 hp = p - vec2(uHlX * ew, uHlY * eh);
     hl = hv * sstep(uHlSize * ew + aa, uHlSize * ew - aa, length(hp)) * cov;
+    // 第二个高光（星星眼）
+    if (uHl2 > 0.001) {
+      vec2 hp2 = p - vec2(uHl2X * ew, uHl2Y * eh);
+      hl = max(hl, uHl2 * hv * sstep(uHl2Size * ew + aa, uHl2Size * ew - aa, length(hp2)) * cov);
+    }
     return cov;
   }
 
@@ -180,7 +186,7 @@ const frag = /* glsl */ `
     float lightLevel = clamp(direct * uBright + es, 0.0, 1.5);
 
     // ---- 脸：物体局部坐标的正面（+z）上，正交投影到脸平面 ----
-    if (n.z > 0.05) {
+    if (n.z > 0.05 && uFaceOn > 0.5) {
       vec2 p = n.xy;
       float aa = max(fwidth(p.x), fwidth(p.y)) * 1.1;
       vec2 gaze = uGaze * uGazeRange;
@@ -191,9 +197,20 @@ const frag = /* glsl */ `
       float eyes = max(eL, eR);
       // 腮红
       vec2 bc = vec2(uBlushX, uEyeY - uBlushBelow);
-      float bd = min(length(p - vec2(-bc.x, bc.y)), length(p - bc));
+      vec2 bs = vec2(1.0 / max(uBlushAspect, 0.2), 1.0);
+      float bd = min(length((p - vec2(-bc.x, bc.y)) * bs), length((p - bc) * bs));
       float blush = uBlushOpacity * (1.0 - sstep(uBlushR * (1.0 - uBlushFeather), uBlushR, bd));
       col = mix(col, uBlushColor * max(lightLevel, 0.4) * 0.9, blush * 0.9);
+      // 害羞的斜线腮红 ///：腮红里几道短斜线（深一点的粉）
+      if (uHatch > 0.001) {
+        vec2 lc = p.x < 0.0 ? p - vec2(-bc.x, bc.y) : p - bc;
+        float w = uBlushR * 0.36;
+        float sl = lc.x + lc.y * 0.6;
+        float dl = abs(fract(sl / w + 0.5) - 0.5) * w;
+        float line = 1.0 - sstep(uBlushR * 0.055 - aa, uBlushR * 0.055 + aa, dl);
+        float box = (1.0 - sstep(uBlushR * 0.38, uBlushR * 0.46, abs(lc.y))) * (1.0 - sstep(uBlushR * 0.78, uBlushR * 0.9, abs(lc.x)));
+        col = mix(col, uBlushColor * 0.62 * max(lightLevel, 0.4), line * box * uHatch);
+      }
       // 嘴
       vec2 mp = p - vec2(gaze.x * 0.5, uEyeY - uMouthBelow + gaze.y * 0.4);
       float mw = uMouthWidth * 0.5 * uMWidth;
@@ -206,6 +223,12 @@ const frag = /* glsl */ `
       float dDisk = length(mp - vec2(0.0, -(abs(depth) + openD) + R)) - R;
       float dFill = max(dDisk, mp.y - 0.25 * th);
       float dSmile = uMouthOpen > 0.02 ? min(dStroke, dFill) : dStroke;
+      // 猫嘴 ω：两段小微笑弧并排，在中间顶上相接（张嘴时用原来的碗）
+      if (uCat > 0.001) {
+        float hw = mw * 0.5;
+        float dCat = min(sdBow(mp - vec2(hw, 0.0), hw, -depth * 1.1), sdBow(mp + vec2(hw, 0.0), hw, -depth * 1.1)) - th;
+        dSmile = mix(dSmile, dCat, uCat * (1.0 - clamp(uMouthOpen * 3.0, 0.0, 1.0)));
+      }
       // o 型
       vec2 orad = vec2(0.026 + 0.022 * uMouthOpen, 0.02 + 0.04 * uMouthOpen) * mix(1.0, uMWidth, 0.5);
       float dO = sdEllipse(mp + vec2(0.0, 0.01), orad);
@@ -294,6 +317,14 @@ export class MoonBody {
         uHlY: { value: 0 },
         uHlSize: { value: 0.2 },
         uHl: { value: 1 },
+        uHl2: { value: 0 },
+        uFaceOn: { value: 1 },
+        uHatch: { value: 0 },
+        uHl2X: { value: 0.3 },
+        uHl2Y: { value: -0.3 },
+        uHl2Size: { value: 0.13 },
+        uCat: { value: 0 },
+        uBlushAspect: { value: 1 },
         uGazeRange: { value: 0.06 },
         uMouthBelow: { value: 0.2 },
         uMouthWidth: { value: 0.2 },
@@ -429,6 +460,14 @@ export class MoonBody {
     u.uHlY.value = F.highlightY;
     u.uHlSize.value = F.highlightSize;
     u.uHl.value = F.highlight;
+    u.uHl2.value = Math.max(F.highlight2, f.sparkle);
+    u.uFaceOn.value = F.visible;
+    u.uHl2X.value = F.highlight2X;
+    u.uHl2Y.value = F.highlight2Y;
+    u.uHl2Size.value = F.highlight2Size;
+    u.uCat.value = Math.max(F.catMouth, f.cat);
+    u.uHatch.value = f.hatch;
+    u.uBlushAspect.value = F.blushAspect;
     u.uGazeRange.value = F.gazeRange;
     u.uMouthBelow.value = F.mouthBelow;
     u.uMouthWidth.value = F.mouthWidth;
