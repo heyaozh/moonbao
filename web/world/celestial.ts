@@ -5,6 +5,7 @@
 
 import * as THREE from "three";
 import { params } from "../moon/params";
+import { asset } from "../asset";
 
 /** 两个材质共享的 uniform（同一个对象）；uEyeM / uVis 各自一份（视差可以不同）。 */
 const commonUniforms = () => ({
@@ -133,7 +134,7 @@ export class Celestial {
   private t = 0;
 
   constructor() {
-    const tex = new THREE.TextureLoader().load("/sky/milkyway_4k.jpg", (t) => this.buildLumMap(t.image as HTMLImageElement));
+    const tex = new THREE.TextureLoader().load(asset("sky/milkyway_4k.jpg"), (t) => this.buildLumMap(t.image as HTMLImageElement));
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.wrapS = THREE.RepeatWrapping;
     tex.anisotropy = 8;
@@ -198,8 +199,9 @@ export class Celestial {
   }
 
   private async loadStars() {
-    const res = await fetch("/sky/stars.bin");
-    const buf = new Float32Array(await res.arrayBuffer());
+    // 星表：扁平数组 [ra_rad, dec_rad, mag, bv] × N（JSON：任何静态托管都认这个类型）
+    const res = await fetch(asset("sky/stars.json"));
+    const buf = Float32Array.from(((await res.json()) as { data: number[] }).data);
     const n = buf.length / 4;
     const dir = new Float32Array(n * 3);
     const mag = new Float32Array(n);

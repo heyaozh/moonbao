@@ -250,7 +250,15 @@ const DOE = (window as any).DeviceOrientationEvent as { requestPermission?: () =
 function startGyro() {
   addEventListener("deviceorientation", (e) => app.stage.cam.setOrientation(e.beta, e.gamma));
 }
-if (matchMedia("(pointer: coarse)").matches && DOE) {
+// 嵌在别的网页里（介绍网站的实机演示）：拿不到陀螺仪授权，不显示那个提示
+const embedded = (() => {
+  try {
+    return window.self !== window.top;
+  } catch {
+    return true;
+  }
+})();
+if (matchMedia("(pointer: coarse)").matches && DOE && !embedded) {
   if (typeof DOE.requestPermission === "function") {
     gyroBtn.hidden = false; // iOS：必须用户手势
     gyroBtn.onclick = async () => {
