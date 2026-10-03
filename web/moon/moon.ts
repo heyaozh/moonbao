@@ -24,7 +24,7 @@ const vert = /* glsl */ `
 
 const frag = /* glsl */ `
   float sstep(float a, float b, float x) { float t = clamp((x - a) / (b - a), 0.0, 1.0); return t * t * (3.0 - 2.0 * t); }
-  uniform sampler2D uAlbedo, uHeight, uCraters;
+  uniform sampler2D uAlbedo, uHeight, uCraters, uPaint;
   uniform float uCraterDetail;
   uniform mat3 uTexRot, uObjToWorld;
   uniform vec3 uSunDir;
@@ -186,6 +186,10 @@ const frag = /* glsl */ `
     col *= mix(0.72, 1.0, clamp(uGlow, 0.0, 1.0)) + max(uGlow - 1.0, 0.0) * 0.3;
     float lightLevel = clamp(direct * uBright + es, 0.0, 1.5);
 
+    // ---- 你画的颜料（G1）：跟着月面走，受同样的明暗，在脸下面 ----
+    vec4 pnt = textureGrad(uPaint, uv, dx, dy);
+    col = mix(col, pnt.rgb * (0.3 + 0.85 * clamp(lightLevel, 0.0, 1.2)), pnt.a);
+
     // ---- 脸：物体局部坐标的正面（+z）上，正交投影到脸平面 ----
     if (n.z > 0.05 && uFaceOn > 0.5) {
       vec2 p = n.xy;
@@ -252,6 +256,13 @@ const frag = /* glsl */ `
   }
 `;
 
+/** 还没画过：1×1 全透明 */
+function emptyPaint() {
+  const t = new THREE.DataTexture(new Uint8Array(4), 1, 1, THREE.RGBAFormat);
+  t.needsUpdate = true;
+  return t;
+}
+
 function makeHaloTexture() {
   const S = 256;
   const c = document.createElement("canvas");
@@ -285,6 +296,7 @@ export class MoonBody {
     const mat = new THREE.ShaderMaterial({
       uniforms: {
         uAlbedo: { value: null },
+        uPaint: { value: emptyPaint() },
         uHeight: { value: null },
         uCraters: { value: null },
         uCraterDetail: { value: 0 },
@@ -400,6 +412,15 @@ export class MoonBody {
   private tmpV = new THREE.Vector3();
 
   /** 沿世界方向 axis 压扁 amount（>0 压扁，<0 拉长），体积守恒。 */
+  /** 画月亮的画布（G1） */
+  setPaint(tex: THREE.Texture) {
+    this.mesh.material.uniforms.uPaint.value = tex;
+  }
+  /** 物体坐标 → 月面贴图坐标的旋转（和着色器里的 uTexRot 同一个） */
+  get texRot(): THREE.Matrix3 {
+    return this.mesh.material.uniforms.uTexRot.value as THREE.Matrix3;
+  }
+
   setSquash(axis: THREE.Vector3, amount: number, radius: number) {
     const a = Math.max(-0.35, Math.min(0.35, amount));
     const along = 1 - a;
