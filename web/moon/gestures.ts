@@ -3,11 +3,21 @@
 // 时间线用 App 时钟（录片可复现）。想让 LLM 也能选的，再提案加进 ACTIONS。
 
 import * as THREE from "three";
+import { approach } from "./math";
 import { params } from "./params";
 import type { MoonRenderer } from "./renderer";
 
+const easeInOutQ = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+const easeOutQ = (t: number) => 1 - Math.pow(1 - Math.min(1, t), 3);
+const easeOutBack = (t: number) => {
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  const u = Math.min(1, t);
+  return 1 + c3 * Math.pow(u - 1, 3) + c1 * Math.pow(u - 1, 2);
+};
+
 export interface GestureHooks {
-  dust?: (p: THREE.Vector3, v?: THREE.Vector3) => void;
+  dust?: (p: THREE.Vector3, v?: THREE.Vector3, life?: number) => void;
   /** 一阵尘：从 from 往 dir 方向 */
   gust?: (from: THREE.Vector3, k: number, dir?: THREE.Vector3) => void;
   note?: () => void;
@@ -28,6 +38,9 @@ export class Gestures {
   private noteClock = 0;
   private noteEvery = 0;
   private noteUntil = 0;
+  private lazyOn = false;
+  private tilting = false;
+  private hiding: { side: number; edgeX: number } | null = null;
 
   constructor(
     private moon: MoonRenderer,
@@ -187,6 +200,140 @@ export class Gestures {
     this.moon.flashExpr("dilate", 0.6);
   }
 
+  // ── V9-D ──
+
+  /** 偷懒：沉到屏幕底、光暗一点、眼睛 - -；关掉就飘回来 */
+  lazy(on: boolean) {
+    this.lazyOn = on;
+    if (on) this.moon.flashExpr("blank", 0.6);
+  }
+
+  /** 翻身睡：慢慢转过去背对你，停一会儿，再转回来 */
+  rollOver(hold = 3) {
+    const turn = 2.5;
+    this.anim(turn, (t) => (this.g.yaw = 2.8 * easeInOutQ(t / turn)));
+    this.at(turn + hold, () => this.anim(turn, (t) => (this.g.yaw = 2.8 * (1 - easeInOutQ(t / turn))), () => (this.g.yaw = 0)));
+  }
+
+  /** 小仪式：转一圈看看自己亮的那一面，亮起来，最后星星眼看你 */
+  ritual() {
+    const dur = 3.4;
+    this.moon.flashExpr("content", dur);
+    this.moon.glowBoost = 0.4;
+    this.anim(dur, (t) => (this.g.yaw = Math.PI * 2 * easeInOutQ(t / dur)), () => (this.g.yaw = 0));
+    this.at(dur, () => {
+      this.moon.flashExpr("starry", 1.4);
+      this.moon.glowBoost = 0.3;
+    });
+  }
+
+  /** 久别归来：睡着且身上落了星尘 → 醒 → 惊讶 → 抖落星尘 → 冲到玻璃前特写 → 慢眨 */
+  longReturn() {
+    this.moon.flashExpr("sleeping", 1.7);
+    const c = this.moon.center;
+    const R = this.moon.radius;
+    for (let i = 0; i < 12; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = Math.random() * 0.8;
+      const p = new THREE.Vector3(c.x + Math.cos(a) * R * r, c.y + Math.sin(a) * R * r, c.z + R * 0.98);
+      this.hooks.dust?.(p, new THREE.Vector3(0, 0, 0), 2.4);
+    }
+    this.at(1.7, () => {
+      this.moon.flashExpr("surprised", 0.6);
+      this.moon.blinker.blinkNow(true);
+    });
+    this.at(2.3, () => this.shakeOff());
+    this.at(3.2, () => this.moon.playAction("lean_in", 1, "manual"));
+    this.at(5.8, () => {
+      this.moon.flashExpr("content", 1.6);
+      this.moon.blinker.blinkNow(false, true);
+    });
+  }
+
+  /** 问完歪着头等你打字 */
+  tiltWait() {
+    this.tilting = true;
+  }
+  tiltRelease() {
+    this.tilting = false;
+  }
+
+  /** 躲猫猫：躲到 side 那边的屏幕外（edgeX = 月亮深度处的屏幕半宽），只在玩的时候 */
+  hide(side: number, edgeX: number) {
+    this.hiding = { side, edgeX };
+    const R = this.moon.radius;
+    const to = side * (edgeX + R * 0.75);
+    this.moon.flashExpr("surprised", 0.5);
+    this.anim(0.6, (t) => (this.g.dx = to * easeOutQ(t / 0.6)));
+  }
+  /** 没人找：探半个身子出来偷看 */
+  peek() {
+    if (!this.hiding) return;
+    const h = this.hiding;
+    const R = this.moon.radius;
+    const from = this.g.dx;
+    const to = h.side * (h.edgeX - R * 0.45);
+    this.moon.flashExpr("pout", 1.4);
+    this.anim(0.5, (t) => (this.g.dx = from + (to - from) * easeOutQ(t / 0.5)));
+  }
+  /** 回来：被找到就笑着弹出来；没人找就自己回来 */
+  unhide(found: boolean) {
+    if (!this.hiding) return;
+    this.hiding = null;
+    const from = this.g.dx;
+    this.anim(0.55, (t) => (this.g.dx = from * (1 - easeOutBack(t / 0.55))), () => (this.g.dx = 0));
+    if (found) {
+      this.moon.flashExpr("laugh", 1.4);
+      this.at(0.3, () => this.moon.playAction("bounce", 0.7, "manual"));
+    } else this.moon.flashExpr("smile", 1.0);
+  }
+  get isHiding() {
+    return !!this.hiding;
+  }
+
+  /** 数星星：视线一颗一颗跳 + 小点头，数到最后数乱了 → 发呆 */
+  countStars(points: THREE.Vector3[], every = 0.8) {
+    points.forEach((p, i) =>
+      this.at(i * every, () => {
+        this.moon.lookTarget = p;
+        this.moon.lookWeight = 0.8;
+        this.anim(0.28, (t) => (this.g.pitch = 0.1 * Math.sin((Math.PI * t) / 0.28)), () => (this.g.pitch = 0));
+      })
+    );
+    this.at(points.length * every, () => {
+      this.moon.lookWeight = 0;
+      this.blankStare(1.4);
+    });
+  }
+
+  /** 看云：视线从左上慢慢扫到右上，看完打个哈欠 */
+  cloudWatch(dur = 5) {
+    this.moon.flashExpr("content", dur);
+    const tgt = new THREE.Vector3();
+    this.anim(dur, (t) => {
+      const u = t / dur;
+      this.moon.lookTarget = tgt.set(-2.2 + 4.4 * u, 2.4, -4);
+      this.moon.lookWeight = 0.7;
+    }, () => (this.moon.lookWeight = 0));
+    this.at(dur - 0.2, () => this.moon.flashExpr("sleepy", 1.3));
+  }
+
+  /** 往某处撞一下（追光斑） */
+  bump(target: THREE.Vector3) {
+    const dir = target.clone().sub(this.moon.center);
+    const dx = Math.sign(dir.x || 1) * 0.14;
+    this.moon.flashExpr("surprised", 0.3);
+    this.anim(0.4, (t) => {
+      const s = Math.sin((Math.PI * t) / 0.4);
+      this.g.dz = 0.2 * s;
+      this.g.dx = dx * s;
+    }, () => {
+      this.g.dz = 0;
+      this.g.dx = 0;
+    });
+    this.at(0.4, () => this.moon.flashExpr("happy", 1.0));
+  }
+
   private notes(seconds: number, every: number) {
     this.noteUntil = this.t + seconds;
     this.noteEvery = every;
@@ -195,6 +342,15 @@ export class Gestures {
 
   update(dt: number) {
     this.t += dt;
+    // 偷懒 / 歪头等：持续状态，慢慢过去、慢慢回来
+    const L = params.eggs.lazy;
+    if (this.lazyOn) {
+      this.g.dy = approach(this.g.dy, -L.sink, 1.4, dt);
+      this.moon.glowBoost = -L.dim;
+      if (!this.moon.flashing) this.moon.flashExpr("blank", 0.5);
+    } else if (!this.anims.length && this.g.dy < -0.01) this.g.dy = approach(this.g.dy, 0, 0.6, dt);
+    if (this.tilting) this.g.roll = approach(this.g.roll, 0.22, 0.5, dt);
+    else if (!this.anims.length && Math.abs(this.g.roll) > 0.001 && this.g.roll > 0.2) this.g.roll = approach(this.g.roll, 0, 0.5, dt);
     if (this.tl.length) {
       const due = this.tl.filter((x) => x.at <= this.t);
       this.tl = this.tl.filter((x) => x.at > this.t);

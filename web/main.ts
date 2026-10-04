@@ -6,6 +6,7 @@ import "@fontsource/dancing-script/400.css";
 import "@fontsource/sacramento/400.css";
 import "@fontsource/caveat/400.css";
 import "@fontsource/ms-madi/400.css";
+import * as THREE from "three";
 import { ACTIONS, type Action } from "../shared/protocol";
 import { App } from "./app/app";
 import { Panel } from "./app/panel";
@@ -30,6 +31,7 @@ import { SymbolFX } from "./eggs/symbols";
 import "./eggs/batch-a";
 import "./eggs/batch-b";
 import "./eggs/batch-c";
+import "./eggs/batch-d";
 import { Gestures } from "./moon/gestures";
 
 const q = new URLSearchParams(location.search);
@@ -53,7 +55,7 @@ app.stage.front.add(symbols.group);
 
 // 小动作（V9-C）：伸懒腰、抖落星尘、打喷嚏、摇头、耸肩、摇摆、鼓脸、吹口哨、发呆、共同注意
 const gestures = new Gestures(app.moon, {
-  dust: (p, v) => symbols.dust(p, v),
+  dust: (p, v, life) => symbols.dust(p, v, life),
   gust: (from, k, dir) => symbols.gust(from, k, dir),
   note: () => {
     symbols.note();
@@ -111,7 +113,10 @@ const interact = new MoonInteraction(app.moon, app.stage.cam, canvas, {
     if (params.eggs.sneeze.enabled && Math.random() < params.eggs.sneeze.afterBlow) gestures.sneeze();
   },
   onDizzy: () => sound.dizzy(),
-  onTapSky: () => life.notifyActivity(),
+  // 点空白处：躲猫猫时点中它躲的那一边 = 找到；否则只是打断小日子
+  onTapSky: (nx, ny) => {
+    if (!life.foundMe(nx, ny)) life.notifyActivity();
+  },
   // 在星空上往下拖 = 把远处（更早）的对话拉近
   onSkyDrag: (dy) => chat.scrollBy(dy / 260),
 });
@@ -132,6 +137,32 @@ life.hooks = {
   stretch: () => gestures.stretch(),
   blank: (s) => gestures.blankStare(s),
   sway: (s) => gestures.sway(s),
+  // ── V9-D ──
+  lazy: (on) => gestures.lazy(on),
+  whistle: (s) => gestures.whistle(s),
+  rollOver: (hold) => gestures.rollOver(hold),
+  count: (pts) => gestures.countStars(pts),
+  hide: (side, edge) => gestures.hide(side, edge),
+  peek: () => gestures.peek(),
+  unhide: (found) => {
+    gestures.unhide(found);
+    if (found) sound.giggle();
+  },
+  cloud: (s) => gestures.cloudWatch(s),
+  doodle: () => {
+    const ch = (profile.userName?.trim()[0] ?? "☾").toUpperCase();
+    app.moon.flashExpr("focused", 2.5);
+    symbols.pop(ch, { anchor: "right", offset: { x: 0.2, y: 0.1, z: 0 }, size: 0.55, life: 4.8, rise: 0.03, sway: 0.2 });
+    sound.shimmer();
+  },
+  bump: (t) => gestures.bump(t),
+  burst: (p) => {
+    for (let i = 0; i < 14; i++) {
+      const a = Math.random() * Math.PI * 2;
+      symbols.dust(p, new THREE.Vector3(Math.cos(a) * 1.6, Math.sin(a) * 1.6, (Math.random() - 0.5) * 0.4));
+    }
+    sound.shimmer();
+  },
 };
 
 // ---------- 对话画面 + 演示大脑 + 玻璃界面 ----------
@@ -271,6 +302,42 @@ app.bus.on("user:send", ({ text }) => {
     app.moon.flashExpr("reading", 1.8);
     app.moon.playAction("lean_in", 0.45, "reflex");
   }
+  // 被你刚发的气泡拽一下（V9-D）；问完歪头等的头也放下
+  gestures.tiltRelease();
+  const b = chat.current?.bubble;
+  if (b) interact.tug(b.mesh.getWorldPosition(new THREE.Vector3()));
+});
+// 它的话里出现 star / 星 就抬头看天（V9-D）；问完歪头等你打字（V9-D）
+let kwSeen = 0;
+let kwAt = -1e9;
+app.bus.on("paced:text", ({ text }) => {
+  const E = params.eggs.lookup;
+  if (!E.enabled) return;
+  const re = /star|星/gi;
+  let n = 0;
+  while (re.exec(text)) n++;
+  if (n > kwSeen && performance.now() - kwAt > E.cooldown * 1000) {
+    kwAt = performance.now();
+    interact.lookAtScreen(0.35, 0.85, 0.9);
+    app.moon.flashExpr("starry", 0.8);
+  }
+  kwSeen = n;
+});
+app.bus.on("paced:done", ({ text }) => {
+  kwSeen = 0;
+  const E = params.eggs.tiltwait;
+  if (E.enabled && /[?？]["'”’)）]*\s*$/.test(text)) {
+    gestures.tiltWait();
+    setTimeout(() => gestures.tiltRelease(), E.maxWait * 1000);
+  }
+});
+app.bus.on("user:typing", ({ active }) => {
+  if (active) gestures.tiltRelease();
+});
+// 久别归来（V9-D）：离开 ≥3 天，先演身体序列，话随后由服务端的主动开口接上
+app.bus.on("engine:hello", ({ absentDays }) => {
+  const E = params.eggs.longreturn;
+  if (E.enabled && absentDays >= E.days) gestures.longReturn();
 });
 let firstText = true;
 let gotEmotion = false;
@@ -320,6 +387,27 @@ else if (!q.has("scene") || sceneName === "real") life.playOpening();
 if (q.has("hour")) app.world.hourOverride = Number(q.get("hour"));
 if (q.has("phase")) params.light.phaseDeg = Number(q.get("phase"));
 app.start();
+// 满月 / 新月的小仪式（V9-D）：当天第一次打开，转一圈看看自己亮的那一面（每天一次）
+if (params.eggs.ritual.enabled && !q.has("scene")) {
+  setTimeout(() => {
+    const ill = app.world.state.phase.illuminated;
+    const key = `moonbao.ritual.${new Date().toDateString()}`;
+    let done = false;
+    try {
+      done = localStorage.getItem(key) === "1";
+    } catch {
+      /* 私密模式 */
+    }
+    if (!done && (ill > 0.985 || ill < 0.015) && !app.moon.chatMode) {
+      try {
+        localStorage.setItem(key, "1");
+      } catch {
+        /* ignore */
+      }
+      gestures.ritual();
+    }
+  }, 6000);
+}
 
 // ---------- 切回来发现你（V9-B）：离开够久再回来，它正在做自己的事、发现你 ----------
 let hiddenAt = 0;

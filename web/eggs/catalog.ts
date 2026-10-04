@@ -58,6 +58,19 @@ export const EGG_CATALOG: EggInfo[] = [
   { name: "tongue", label: "吐舌头 :P", group: "C", how: "被挠痒痒笑完之后", seconds: 4 },
   { name: "dilate", label: "瞳孔放大", group: "C", how: "看到流星的那一瞬", seconds: 4 },
   { name: "symbols", label: "zzz / ♪ / ! 接上小日子", group: "C", how: "哼歌冒 ♪、打瞌睡冒 zzz、流星突然出现冒「!」", seconds: 10, life: true },
+  // ── V9-D · 小日子与世界 ──
+  { name: "lazy", label: "偷懒模式", group: "D", how: "待机偶尔：沉到屏幕底、光暗、眼睛 - -；戳它就吹口哨飘回来", seconds: 9, life: true },
+  { name: "chase", label: "追光斑", group: "D", how: "一粒光斑贴着玻璃飘过，它盯着、撞过去，光斑炸成星", seconds: 6, life: true },
+  { name: "count", label: "数星星", group: "D", how: "夜里待机：视线一颗颗跳 + 小点头，数乱了发呆", seconds: 8, life: true },
+  { name: "hide", label: "躲猫猫", group: "D", how: "夜里待机：躲到屏幕边外；点它躲的那一边 = 找到，笑着弹出来；没人找就自己探头", seconds: 9, life: true },
+  { name: "rollover", label: "翻身睡", group: "D", how: "打瞌睡时慢慢转过去背对你，再转回来", seconds: 10 },
+  { name: "cloud", label: "看云", group: "D", how: "白天待机：看云飘过，看完打哈欠", seconds: 7 },
+  { name: "ritual", label: "满月 / 新月小仪式", group: "D", how: "当天是满月或新月：转一圈看看自己亮的那一面（每天一次）", seconds: 6 },
+  { name: "longreturn", label: "久别归来", group: "D", how: "离开 3 天以上回来：睡着落了星尘 → 醒 → 抖落 → 冲到玻璃前 → 慢眨", seconds: 9 },
+  { name: "tug", label: "被气泡拽一下", group: "D", how: "你刚发的气泡把它拽一下", seconds: 5 },
+  { name: "doodle", label: "它主动写一个字", group: "D", how: "夜里很久没人理：用光点写一个「☾」或你名字的首字母", seconds: 7 },
+  { name: "lookup", label: "说到 star / 星 就抬头", group: "D", how: "它的话里出现 star 或 星，抬头看天", seconds: 8 },
+  { name: "tiltwait", label: "问完歪头等", group: "D", how: "它问了问题就歪着头等你打字", seconds: 9 },
 ];
 
 export const eggInfo = (name: string) => EGG_CATALOG.find((e) => e.name === name);

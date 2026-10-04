@@ -528,6 +528,31 @@ const defaults = {
     dilate: { enabled: true },
     /** zzz / ♪ / ! 接到真实触发：打瞌睡 / 哼歌 / 流星突然出现 */
     symbols: { enabled: true, bangChance: 0.6 },
+    // ── V9-D 小日子与世界 ──
+    /** 偷懒：沉多深、光暗多少、一次偷懒多久（秒）、待机抽中的权重；戳它就吹口哨飘回来 */
+    lazy: { enabled: true, sink: 0.95, dim: 0.3, min: 20, max: 40, idleWeight: 0.4 },
+    /** 追光斑：一粒光斑贴着玻璃飘过，它盯着、撞过去，光斑炸成星 */
+    chase: { enabled: true, idleWeight: 1.0 },
+    /** 数星星：数几颗、数到一半数乱了 */
+    count: { enabled: true, stars: 5, idleWeight: 0.9 },
+    /** 躲猫猫：躲多久没人找就自己探头（秒） */
+    hide: { enabled: true, wait: 10, idleWeight: 0.5 },
+    /** 翻身睡：打瞌睡时转过去再转回来 */
+    rollover: { enabled: true },
+    /** 看云（白天） */
+    cloud: { enabled: true, idleWeight: 1.5 },
+    /** 银河升起 / 满月新月的小仪式：转一圈看看自己亮的那一面（每天最多一次） */
+    ritual: { enabled: true },
+    /** 久别归来：离开几天以上回来，先演身体序列再说话 */
+    longreturn: { enabled: true, days: 3 },
+    /** 被你刚发的气泡拽一下 */
+    tug: { enabled: true, pull: 0.9 },
+    /** 它主动写一个字（夜里、很久没人理、每天一次） */
+    doodle: { enabled: true, idleAfter: 90, idleWeight: 0.3 },
+    /** 它的话里出现 star / 星 就抬头看天 */
+    lookup: { enabled: true, cooldown: 4 },
+    /** 问完歪头等你打字（最多等几秒） */
+    tiltwait: { enabled: true, maxWait: 25 },
   },
 
   // ───────────── 性能 ─────────────
