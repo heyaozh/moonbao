@@ -105,10 +105,10 @@ export class DemoBrain {
   }
 
   /** 它主动说一句（没有你的气泡） */
-  say(text: string, v = 0.6, a = 0.5, act: Action = "brighten") {
+  say(text: string, v = 0.6, a = 0.5, act: Action = "brighten", opts: { proactive?: boolean } = {}) {
     const g = ++this.gen;
     this.at(0.05, () => {
-      this.bus.emit("engine:proactive", { reason: "follow_up" });
+      if (opts.proactive ?? true) this.bus.emit("engine:proactive", { reason: "follow_up" });
       this.bus.emit("moon:hint", { length: [...text].length, text });
       this.bus.emit("paced:emotion", { valence: v, arousal: a });
       this.bus.emit("paced:action", { name: act, intensity: 0.6 });

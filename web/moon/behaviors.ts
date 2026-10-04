@@ -68,8 +68,10 @@ export class Behaviors {
   private cur: { kind: Kind; t: number; dur: number; data?: any } | null = null;
   private t = 0;
   private opening: { t: number; kind: Kind } | null = null;
-  /** 聊天中 / 录制中不要自己玩 */
+  /** 聊天中 / 录制中不要自己玩（主循环每帧喂） */
   paused = false;
+  /** 场景 / 彩蛋锁住：不自己玩（切场景时 base() 解锁） */
+  locked = false;
 
   constructor(
     private moon: MoonRenderer,
@@ -160,7 +162,7 @@ export class Behaviors {
 
   update(dt: number) {
     this.t += dt;
-    const busy = this.paused || this.interact.isBusy || this.moon.busy;
+    const busy = this.paused || this.locked || this.interact.isBusy || this.moon.busy;
     this.idle = busy ? 0 : this.idle + dt;
     // 星星离场：往外飞、淡出
     if (!this.cur || this.cur.kind !== "star") {

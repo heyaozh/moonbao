@@ -10,6 +10,7 @@ import type { Behaviors } from "../moon/behaviors";
 import type { MoonInteraction } from "../moon/interact";
 import { params } from "../moon/params";
 import type { Onboarding } from "../ui/onboarding";
+import { eggInfo } from "../eggs/catalog";
 import type { App } from "./app";
 
 export interface SceneCtx {
@@ -18,6 +19,8 @@ export interface SceneCtx {
   life: Behaviors;
   onboarding?: Onboarding;
   interact?: MoonInteraction;
+  /** 脚本化地演一条彩蛋（?scene=egg-<名字>，录片用） */
+  egg?: (name: string) => boolean;
 }
 
 export interface Scene {
@@ -54,6 +57,7 @@ function base(app: App, x: SceneCtx, opts: { keepChat?: boolean } = {}) {
     x.chat.setThinking(false);
   }
   x.life.paused = false;
+  x.life.locked = false;
 }
 
 /** 按时间表跑一段剧本：[秒, 做什么] */
@@ -369,7 +373,19 @@ export const SCENES: Record<string, Scene> = {
 };
 
 export function applyScene(app: App, name: string | null, x: SceneCtx): string | null {
-  if (!name || !SCENES[name]) return null;
+  if (!name) return null;
+  // 彩蛋场景：满月、夜里、小日子锁住（除非这条彩蛋本身是小日子），0.8 秒后开演（App 时钟，录片可复现）
+  if (name.startsWith("egg-")) {
+    const egg = name.slice(4);
+    const info = eggInfo(egg);
+    if (!info || !x.egg) return null;
+    base(app, x);
+    params.light.phaseDeg = 0;
+    x.life.locked = !info.life;
+    x.demo.schedule(0.8, () => x.egg!(egg));
+    return name;
+  }
+  if (!SCENES[name]) return null;
   SCENES[name].apply(app, x);
   return name;
 }

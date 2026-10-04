@@ -269,6 +269,8 @@ const defaults = {
     blushBase: 0.62,
     blushMax: 0.85,
     blushFeather: 0.92,
+    /** ♥ 爱心眼的颜色（秘密彩蛋）。 */
+    heartColor: "#ff5277",
     /** 表情之间过渡的弹簧（频率 / 阻尼）。 */
     morphOmega: 11,
     morphZeta: 0.72,
@@ -446,6 +448,18 @@ const defaults = {
     /** 随机钟琴单音的间隔（秒） */
     chimeMin: 5,
     chimeMax: 13,
+  },
+
+  // ───────────── 彩蛋（PLAN V9）：每条一个开关 + 手感数值。用户看片打 ✗ 的把 enabled 关掉，代码不删 ─────────────
+  eggs: {
+    /** 秘密彩蛋（V9-E）：暗号 → 固定回复 + 爱心眼 */
+    secret: { enabled: true, /** 爱心眼持续（秒） */ heartHold: 7, /** 冒几颗 ♥ */ hearts: 3, /** 演示片里写字开始的时刻（秒） */ wordsAt: 1.6 },
+    /** 睡觉冒 z z z */
+    zzz: { enabled: true, /** 每隔几秒冒一个 */ every: 0.85, size: 0.28, rise: 0.2, life: 2.1 },
+    /** 哼歌冒 ♪ */
+    notes: { enabled: true, size: 0.3, rise: 0.38, life: 1.9 },
+    /** 惊讶冒「!」 */
+    bang: { enabled: true, size: 0.46, life: 0.95 },
   },
 
   // ───────────── 性能 ─────────────

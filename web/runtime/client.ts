@@ -93,6 +93,9 @@ export class EngineClient {
       case "error":
         this.bus.emit("engine:error", { message: ev.message });
         break;
+      case "egg":
+        this.bus.emit("engine:egg", { id: ev.id, expr: ev.expr, action: ev.action, intensity: ev.intensity, grand: ev.grand, words: ev.words });
+        break;
       case "reflex": {
         const { type: _t, ...rest } = ev;
         this.bus.emit("engine:reflex", rest);

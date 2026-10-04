@@ -24,6 +24,10 @@ import { Behaviors } from "./moon/behaviors";
 import { EXPR_LABELS, EXPR_NAMES } from "./moon/expressions";
 import { MoonInteraction } from "./moon/interact";
 import { params } from "./moon/params";
+import { EGG_CATALOG } from "./eggs/catalog";
+import { EggStage, playEgg, type EggCtx, type EggOpts } from "./eggs/registry";
+import { SymbolFX } from "./eggs/symbols";
+import "./eggs/batch-a";
 
 const q = new URLSearchParams(location.search);
 // 用户在设置里调过的偏好（声音、画面）先盖到 params 上，再建场景
@@ -153,6 +157,19 @@ app.bus.on("engine:transcript", ({ role, text }) => {
     w(text);
   }
 });
+// ---------- 彩蛋（PLAN V9）：符号管线 + 注册表 ----------
+const symbols = new SymbolFX();
+app.stage.front.add(symbols.group);
+const eggStage = new EggStage();
+const eggCtx = (scripted: boolean): EggCtx => ({ app, chat, demo, life, interact, symbols, sound, stage: eggStage, scripted });
+const egg = (name: string, opts: EggOpts = {}, scripted = false) => playEgg(name, eggCtx(scripted), opts);
+// 秘密彩蛋命中（服务端）：先预告回复的长度（短句写得大）、这一轮走隆重档，再演
+app.bus.on("engine:egg", (ev) => {
+  chat.hint([...ev.words].length, ev.words);
+  chat.markGrand();
+  egg("secret", { expr: ev.expr, action: ev.action, intensity: ev.intensity });
+});
+
 // 大脑 → 画面
 app.bus.on("paced:text", ({ text }) => chat.moonSay(text, false));
 app.bus.on("paced:done", ({ text }) => {
@@ -212,11 +229,13 @@ app.onTick((dt) => {
   demo.update(dt);
   chat.update(dt);
   ui.update();
-  // 聊天时不自己玩
-  life.paused = app.moon.chatMode;
+  eggStage.now = app.moon.time;
+  symbols.update(dt, app.moon.center, app.moon.radius, app.stage.pixelRatio);
+  // 聊天时、演彩蛋时不自己玩
+  life.paused = app.moon.chatMode || eggStage.active;
   life.update(dt);
 });
-const sceneCtx: SceneCtx = { chat, demo, life, onboarding, interact };
+const sceneCtx: SceneCtx = { chat, demo, life, onboarding, interact, egg: (name) => egg(name, {}, true) };
 
 const sceneName = applyScene(app, q.get("scene") ?? "real", sceneCtx);
 // 第一次打开：首次见面；以后打开：它正在做自己的事，被你发现
@@ -302,6 +321,10 @@ if (q.get("panel") === "off") panel.root.hidden = true;
   let ar = 0.5;
   panel.slider(a, "心情", -1, 1, 0.01, () => v, (x) => app.moon.setEmotion((v = x), ar));
   panel.slider(a, "活力", 0, 1, 0.01, () => ar, (x) => app.moon.setEmotion(v, (ar = x)));
+}
+{
+  const s = panel.section("彩蛋（V9）");
+  panel.buttons(s, EGG_CATALOG.map((e) => [`${e.group} · ${e.label}`, () => egg(e.name, {}, true)]));
 }
 {
   const s = panel.section("字");
@@ -483,6 +506,8 @@ declare global {
     __tilt: (xDeg: number, yDeg: number) => void;
     __interact: MoonInteraction;
     __life: Behaviors;
+    __egg: (name: string, opts?: EggOpts) => boolean;
+    __eggs: typeof EGG_CATALOG;
     __chat: ChatView;
     __demo: DemoBrain;
     __sound: SoundEngine;
@@ -493,6 +518,8 @@ window.__chat = chat;
 window.__demo = demo;
 window.__interact = interact;
 window.__life = life;
+window.__egg = (name, opts = {}) => egg(name, opts, true);
+window.__eggs = EGG_CATALOG;
 window.__app = app;
 window.__params = params;
 window.__scene = (name) => void applyScene(app, name, sceneCtx);

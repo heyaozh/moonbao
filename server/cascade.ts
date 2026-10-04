@@ -11,6 +11,8 @@ import { consolidate, formatNow } from "./memory/consolidate.js";
 import { MemoryStore, type RecalledMemory } from "./memory/store.js";
 import { createTTS, type TTSProvider } from "./tts.js";
 import { localRead, presetFor, quickRead } from "./reflex.js";
+import { CHARACTER_NAME } from "./character.js";
+import { decodeReply, EggBook, type EggEntry } from "./eggs.js";
 import { DEFAULT_HEADER, HeaderScanner, type Action, type PetHeader } from "../shared/protocol.js";
 
 const DAY = 86400_000;
@@ -26,6 +28,9 @@ const RETURN_AFTER_DAYS = Number(process.env.RETURN_AFTER_DAYS ?? 3);
 const FOLLOW_UP_MAX_AGE_MS = 3 * DAY;
 // 两次 hello 间隔小于这个值视为同一次会话（页面刷新/断线重连不重复判定）
 const SESSION_GAP_MS = 30 * 60_000;
+
+// 秘密彩蛋命中后，表情先演多久再开始写字（前端的演出：惊讶 → 爱心眼 + 弹跳 → 亮起）
+const EGG_WORDS_DELAY_MS = Number(process.env.EGG_WORDS_DELAY_MS ?? 1500);
 
 // 听不清时不猜，直接歪一歪——失败即人设
 const PARDON_LINES = ["嗯？", "唔……没听清诶。", "刚刚有片云飘过来，没听清。"];
@@ -51,6 +56,7 @@ export class CascadeEngine implements DialogueEngine {
   private gen = 0; // 代号：打断后旧代的一切输出都被丢弃
   private aborter: AbortController | null = null;
   private memory = new MemoryStore();
+  private eggs = new EggBook();
   // 自上次整理以来的对话（整理后清空，避免重复提取）
   private sessionLog: ChatMessage[] = [];
   private consolidateTimer: ReturnType<typeof setTimeout> | null = null;
@@ -135,6 +141,8 @@ export class CascadeEngine implements DialogueEngine {
     const t = text.trim();
     if (!t) return;
     this.memory.touchSeen();
+    const egg = this.eggs.match(t);
+    if (egg) return this.performEgg(egg, t);
     await this.turn(t, {});
   }
 
@@ -161,6 +169,8 @@ export class CascadeEngine implements DialogueEngine {
       return;
     }
     this.memory.touchSeen();
+    const egg = this.eggs.match(text);
+    if (egg) return this.performEgg(egg, text, { gen: myGen, confidence: asr.confidence });
 
     // 置信度低：不进 LLM，不瞎猜，直接歪头反问（不写入上下文）
     if (asr.confidence < LOW_CONFIDENCE) {
@@ -174,6 +184,32 @@ export class CascadeEngine implements DialogueEngine {
       return;
     }
     await this.turn(text, {}, { gen: myGen, aborter, confidence: asr.confidence });
+  }
+
+  /** 秘密彩蛋（PLAN V9-E）：跳过 Jev 与 LLM，直接演出 + 固定回复；这一轮不进 history / sessionLog（以后的 LLM 不会莫名引用暗号）。 */
+  private async performEgg(egg: EggEntry, userText: string, pre?: { gen: number; confidence?: number }) {
+    let myGen: number;
+    if (pre) myGen = pre.gen;
+    else {
+      myGen = ++this.gen;
+      this.aborter?.abort();
+      this.aborter = null;
+    }
+    this.setState("thinking");
+    this.emit({ type: "transcript", role: "user", text: userText, confidence: pre?.confidence });
+    const words = decodeReply(egg.reply)
+      .replaceAll("{{moon}}", this.profile.moonName || CHARACTER_NAME)
+      .replaceAll("{{user}}", this.profile.userName || "you");
+    console.log(`[eggs] 命中 ${egg.id}`);
+    this.emit({ type: "egg", id: egg.id, expr: egg.expr ?? "heart", action: egg.action ?? "bounce", intensity: egg.intensity ?? 0.8, grand: egg.grand ?? true, words });
+    this.emit({ type: "emotion", valence: 0.9, arousal: 0.7 });
+    await new Promise((r) => setTimeout(r, EGG_WORDS_DELAY_MS));
+    if (myGen !== this.gen) return;
+    this.setState("speaking");
+    this.emit({ type: "reply_delta", text: words });
+    this.emit({ type: "reply_done", text: words });
+    this.emit({ type: "transcript", role: "pet", text: words });
+    this.setState("idle");
   }
 
   /** 页面打开：到期的 follow-up → 主动提起；久别 → 说想你。受每日频控。 */
