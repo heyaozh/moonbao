@@ -232,6 +232,8 @@ export class MoonText {
   height = 0;
   /** 最后一个字揭完的时间 */
   finishAt = 0;
+  /** 笔锋现在在哪（消息组的局部坐标；还没开始写 = null）。月亮指挥星星时看着它 */
+  cursor: THREE.Vector3 | null = null;
   /** 每个字开始揭开时（写字的音） */
   onGlyph?: () => void;
   private revealedCount = 0;
@@ -478,6 +480,8 @@ export class MoonText {
       for (let k = this.revealedCount; k < started; k++) this.onGlyph?.();
       this.revealedCount = started;
     }
+    let cursorLine: LineObj | null = null;
+    let cursorFront = 0;
     for (const lo of this.lines) {
       // 笔锋 = 最后一个开始揭开的字，揭到哪了
       let front = 0;
@@ -494,7 +498,16 @@ export class MoonText {
       u.uFront.value = front;
       u.uOpacity.value = this.opacity;
       u.uCool.value = this.cool;
+      if (front > 0) {
+        cursorLine = lo;
+        cursorFront = Math.min(front, lo.rendered.canvas.width);
+      }
     }
+    if (cursorLine && !this.done) {
+      const upp = this.ctx.unitsPerPx;
+      const lo = cursorLine as LineObj;
+      this.cursor = (this.cursor ?? new THREE.Vector3()).set(lo.x0 + cursorFront * upp, lo.yTop - (lo.rendered.canvas.height * upp) / 2, 0);
+    } else if (this.done && this.finishAt <= now) this.cursor = null;
     this.particles.update(now, bufferW, bufferH, pixelRatio, this.opacity * (1 - this.cool * 0.6));
     // 暗底
     const pad = 0.14;

@@ -29,6 +29,8 @@ import { EggStage, playEgg, type EggCtx, type EggOpts } from "./eggs/registry";
 import { SymbolFX } from "./eggs/symbols";
 import "./eggs/batch-a";
 import "./eggs/batch-b";
+import "./eggs/batch-c";
+import { Gestures } from "./moon/gestures";
 
 const q = new URLSearchParams(location.search);
 // 用户在设置里调过的偏好（声音、画面）先盖到 params 上，再建场景
@@ -48,6 +50,17 @@ addEventListener("keydown", unlock, { once: true });
 // ---------- 彩蛋（PLAN V9）：符号管线（手势要用它冒星尘，先建） ----------
 const symbols = new SymbolFX();
 app.stage.front.add(symbols.group);
+
+// 小动作（V9-C）：伸懒腰、抖落星尘、打喷嚏、摇头、耸肩、摇摆、鼓脸、吹口哨、发呆、共同注意
+const gestures = new Gestures(app.moon, {
+  dust: (p, v) => symbols.dust(p, v),
+  gust: (from, k, dir) => symbols.gust(from, k, dir),
+  note: () => {
+    symbols.note();
+    sound.glyph();
+  },
+  sound: { sneeze: () => sound.gust(0.9), pfft: () => sound.release(3), shake: () => sound.tick(), stretch: () => sound.grab() },
+});
 
 // ---------- 不聊天也好玩：手势 + 小日子 ----------
 const vibrate = (ms: number) => {
@@ -87,6 +100,16 @@ const interact = new MoonInteraction(app.moon, app.stage.cam, canvas, {
     symbols.gust(from, k);
   },
   onSkyTrail: (p) => symbols.dust(p),
+  // ── V9-C ──
+  onPout: () => {
+    if (params.eggs.puff.enabled) gestures.puff();
+  },
+  onSettled: (spin) => {
+    if (params.eggs.shakeoff.enabled && spin > params.eggs.shakeoff.afterSpin) gestures.shakeOff();
+  },
+  onBlown: () => {
+    if (params.eggs.sneeze.enabled && Math.random() < params.eggs.sneeze.afterBlow) gestures.sneeze();
+  },
   onDizzy: () => sound.dizzy(),
   onTapSky: () => life.notifyActivity(),
   // 在星空上往下拖 = 把远处（更早）的对话拉近
@@ -94,6 +117,22 @@ const interact = new MoonInteraction(app.moon, app.stage.cam, canvas, {
 });
 const life = new Behaviors(app.moon, app.world, app.stage.cam, interact, () => app.stage.pixelRatio);
 app.stage.back.add(life.star.points);
+life.hooks = {
+  zzz: (on) => symbols.zzz(on),
+  note: () => {
+    symbols.note();
+    sound.glyph();
+  },
+  bang: () => {
+    symbols.bang();
+    sound.shimmer();
+  },
+  dilate: () => gestures.dilate(),
+  sneeze: () => gestures.sneeze(),
+  stretch: () => gestures.stretch(),
+  blank: (s) => gestures.blankStare(s),
+  sway: (s) => gestures.sway(s),
+};
 
 // ---------- 对话画面 + 演示大脑 + 玻璃界面 ----------
 if (q.has("font") && q.get("font")! in FONT_CANDIDATES) fontState.en = q.get("font") as FontName;
@@ -187,7 +226,7 @@ app.bus.on("engine:transcript", ({ role, text }) => {
 });
 // ---------- 彩蛋（PLAN V9）：注册表 ----------
 const eggStage = new EggStage();
-const eggCtx = (scripted: boolean): EggCtx => ({ app, chat, demo, life, interact, symbols, sound, stage: eggStage, scripted });
+const eggCtx = (scripted: boolean): EggCtx => ({ app, chat, demo, life, interact, symbols, sound, gestures, stage: eggStage, scripted });
 const egg = (name: string, opts: EggOpts = {}, scripted = false) => playEgg(name, eggCtx(scripted), opts);
 // 秘密彩蛋命中（服务端）：先预告回复的长度（短句写得大）、这一轮走隆重档，再演
 app.bus.on("engine:egg", (ev) => {
@@ -219,9 +258,19 @@ app.bus.on("user:barge", () => {
 app.bus.on("engine:reflex", (r) => {
   if (sentAt) pushLat("reflex", performance.now() - sentAt);
   app.moon.setEmotion(r.valence, r.arousal);
-  app.moon.flashExpr(r.expr as any, 2.4);
+  // 难懂的问题：一滴汗 + 3D 问号（V9-C）
+  app.moon.flashExpr(r.confused && params.eggs.sweat.enabled ? "sweat" : (r.expr as any), 2.4);
   app.moon.playAction(r.action, r.intensity, "brain");
   if (r.confused) chat.thinking.showQuestion(true);
+});
+// 它主动开口前光闪两下（V9-C）；你发长句它眯眼认真看（V9-C）
+app.bus.on("engine:proactive", () => app.moon.blinkLight());
+app.bus.on("user:send", ({ text }) => {
+  const E = params.eggs.reading;
+  if (E.enabled && [...text].length >= E.minChars) {
+    app.moon.flashExpr("reading", 1.8);
+    app.moon.playAction("lean_in", 0.45, "reflex");
+  }
 });
 let firstText = true;
 let gotEmotion = false;
@@ -256,6 +305,7 @@ app.onTick((dt) => {
   chat.update(dt);
   ui.update();
   eggStage.now = app.moon.time;
+  gestures.update(dt);
   symbols.update(dt, app.moon.center, app.moon.radius, app.stage.pixelRatio);
   // 聊天时、演彩蛋时不自己玩
   life.paused = app.moon.chatMode || eggStage.active;

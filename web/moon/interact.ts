@@ -37,6 +37,13 @@ export interface InteractEvents {
   onTrust?: () => void;
   /** 在星空上拖出的轨迹（世界坐标，节流过） */
   onSkyTrail?: (p: THREE.Vector3) => void;
+  // ── V9-C ──
+  /** 连戳三下鼓脸（主入口接「鼓脸放气」） */
+  onPout?: () => void;
+  /** 翻滚够多圈后停稳（spin = 这段时间转过的弧度；主入口接「抖落星尘」） */
+  onSettled?: (spin: number) => void;
+  /** 被吹了之后（主入口按概率接「打喷嚏」） */
+  onBlown?: () => void;
 }
 
 const TAP_MS = 260;
@@ -350,6 +357,7 @@ export class MoonInteraction {
       this.moon.flashExpr("pout", 2.0);
       this.pokes = [];
       setTimeout(() => this.moon.flashExpr("smile", 1.2), 2000);
+      this.ev.onPout?.();
     } else if (wasAsleep) {
       /* 醒来的序列自己管表情 */
     } else if (z?.zone === "eye") {
@@ -449,8 +457,9 @@ export class MoonInteraction {
     this.moon.flashExpr("laugh", E.laugh);
     this.moon.playAction("shiver", 1, "manual");
     this.moon.blushBoost = 0.5;
-    // 笑到一抖一抖：几下小小的压扁
+    // 笑到一抖一抖：几下小小的压扁；笑完吐舌头 :P
     for (let i = 0; i < 4; i++) this.at(0.12 + i * 0.22, () => this.squash.kick(-1.1));
+    if (params.eggs.tongue.enabled) this.at(E.laugh, () => this.moon.flashExpr("tongue", 1.0));
     this.ev.onTickle?.();
   }
 
@@ -608,6 +617,7 @@ export class MoonInteraction {
     this.moon.flashExpr("squeeze", 0.55);
     this.at(0.6, () => this.moon.flashExpr("surprised", 0.7));
     this.ev.onBlow?.(k, from);
+    this.at(1.4, () => this.ev.onBlown?.());
   }
 
   /** 看向屏幕上的某一点（点空白处） */
@@ -809,10 +819,13 @@ export class MoonInteraction {
       this.moon.extra.squashAxis.copy(this.squashAxis);
     }
     this.moon.extra.pos.copy(this.offset);
-    // 翻滚之后自己转回来看你
+    // 翻滚之后自己转回来看你；转过的圈数够多 → 停稳后抖落星尘（V9-C）
     if (this.holdRestoreAt && this.t > this.holdRestoreAt) {
       this.moon.rot.hold = Math.min(1, this.moon.rot.hold + dt * 1.6);
-      if (this.moon.rot.hold >= 1) this.holdRestoreAt = 0;
+      if (this.moon.rot.hold >= 1) {
+        this.holdRestoreAt = 0;
+        this.at(0.5, () => this.ev.onSettled?.(this.spinAcc));
+      }
     }
     // 转太多圈 → 晕
     const wl = this.moon.rot.w.length();

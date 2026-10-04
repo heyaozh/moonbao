@@ -231,6 +231,9 @@ const defaults = {
     haloOpacity: 0.5,
     haloColor: "#ffe9c8",
     glowDefault: 1.0,
+    /** 呼吸光（V9-C）：待机时光晕的慢呼吸幅度与周期（秒）；活力高呼吸快 */
+    breathAmp: 0.06,
+    breathPeriod: 5.5,
     glowMin: 0.35,
     glowMax: 1.6,
     glowTau: 0.6,
@@ -271,6 +274,9 @@ const defaults = {
     blushFeather: 0.92,
     /** ♥ 爱心眼的颜色（秘密彩蛋）。 */
     heartColor: "#ff5277",
+    /** ✦ 星星眼的颜色、汗滴的颜色（V9-C）。 */
+    starColor: "#ffd166",
+    sweatColor: "#cfe6ff",
     /** 表情之间过渡的弹簧（频率 / 阻尼）。 */
     morphOmega: 11,
     morphZeta: 0.72,
@@ -314,6 +320,8 @@ const defaults = {
     driftArousalGain: 0.8,
     /** 情绪惯性（秒）。 */
     emotionTau: 1.4,
+    /** 在听（你在打字）时漂浮幅度降到多少（V9-C「听时安定」）。 */
+    listenSettle: 0.45,
     /** 月亮「有重量」：相机横移时它慢半拍地跟一点。 */
     swayGain: 0.12,
     swayOmega: 3.0,
@@ -487,6 +495,39 @@ const defaults = {
     hover: { enabled: true, within: 1.8 },
     /** 安卓震动（毫秒；iOS 等 Capacitor） */
     vibrate: { enabled: true, poke: 12, bounce: 25 },
+    // ── V9-C 动作与表情 ──
+    /** 共同注意：看流星 → 看你 → 再看流星 */
+    attend: { enabled: true, lookBackAt: 0.9, lookBackFor: 0.45 },
+    /** 写完一句看你一眼 + 眨一下 */
+    glance: { enabled: true },
+    /** 指挥星星写字：视线跟着笔锋；隆重档时 o 嘴专注 */
+    conduct: { enabled: true, weight: 0.55 },
+    /** 读你的字：长句（字数 ≥ minChars）飘近眯眼看；在听时漂浮变小（motion.listenSettle） */
+    reading: { enabled: true, minChars: 40 },
+    /** 呼吸光（幅度与周期在 light.breath*）+ 想引起注意时闪两下 */
+    breath: { enabled: true, blinkStrength: 0.45 },
+    stretch: { enabled: true, amount: 1.6 },
+    /** 抖落星尘：翻滚够多圈停下来 / 打喷嚏后 / 睡醒 */
+    shakeoff: { enabled: true, afterSpin: 5 },
+    /** 打喷嚏：稀有待机事件（权重）；被吹气后的概率 */
+    sneeze: { enabled: true, idleWeight: 0.25, afterBlow: 0.35 },
+    headshake: { enabled: true, deg: 12 },
+    shrug: { enabled: true, rise: 0.09 },
+    /** 翻跟头：spin 动作强度 ≥ 这个值就前滚一圈而不是转圈 */
+    flip: { enabled: true, at: 0.85 },
+    /** 摇摆：哼歌时心情好就摇 */
+    sway: { enabled: true, rollDeg: 8, minValence: 0.35 },
+    /** 鼓脸：连戳后鼓多大、鼓多久再放气 */
+    puff: { enabled: true, scale: 0.06, hold: 2 },
+    starry: { enabled: true },
+    /** 发呆：稀有待机（权重）、停几秒 */
+    blank: { enabled: true, idleWeight: 1.0, min: 2.5, max: 4.5 },
+    sweat: { enabled: true },
+    whistle: { enabled: true },
+    tongue: { enabled: true },
+    dilate: { enabled: true },
+    /** zzz / ♪ / ! 接到真实触发：打瞌睡 / 哼歌 / 流星突然出现 */
+    symbols: { enabled: true, bangChance: 0.6 },
   },
 
   // ───────────── 性能 ─────────────

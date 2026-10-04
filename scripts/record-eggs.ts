@@ -200,8 +200,14 @@ async function main() {
   } finally {
     cdp.close();
     chrome.proc.kill();
-    rmSync(chrome.dir, { recursive: true, force: true });
     vite?.kill();
+    // Chrome 退出要一会儿，临时目录等它放手再删（删不掉也不算失败）
+    await sleep(400);
+    try {
+      rmSync(chrome.dir, { recursive: true, force: true });
+    } catch {
+      /* 留在 /tmp 里也无妨 */
+    }
   }
   if (failed) process.exit(1);
 }

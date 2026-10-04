@@ -8,12 +8,25 @@ import type { WindowCamera } from "../world/camera";
 import type { World } from "../world/world";
 import type { MoonInteraction } from "./interact";
 import { clamp } from "./math";
+import { params } from "./params";
 import type { MoonRenderer } from "./renderer";
 
-type Kind = "glance" | "meteor" | "yawn" | "hum" | "star" | "doze";
+/** 小日子要用到的外部效果（主入口接：符号、小动作） */
+export interface LifeHooks {
+  zzz?: (on: boolean) => void;
+  note?: () => void;
+  bang?: () => void;
+  dilate?: () => void;
+  sneeze?: () => void;
+  stretch?: () => void;
+  blank?: (seconds: number) => void;
+  sway?: (seconds: number) => void;
+}
 
-const WEIGHTS: Record<Kind, number> = { glance: 3, meteor: 2, yawn: 1, hum: 1.2, star: 1.4, doze: 0.6 };
-const DUR: Record<Kind, [number, number]> = { glance: [1.2, 2.2], meteor: [1.6, 1.6], yawn: [2.2, 2.2], hum: [3, 4.5], star: [5, 6.5], doze: [8, 14] };
+type Kind = "glance" | "meteor" | "yawn" | "hum" | "star" | "doze" | "sneeze" | "space" | "stretch";
+
+const WEIGHTS: Record<Kind, number> = { glance: 3, meteor: 2, yawn: 1, hum: 1.2, star: 1.4, doze: 0.6, sneeze: 0.25, space: 1.0, stretch: 0.5 };
+const DUR: Record<Kind, [number, number]> = { glance: [1.2, 2.2], meteor: [1.6, 1.6], yawn: [2.2, 2.2], hum: [3, 4.5], star: [5, 6.5], doze: [8, 14], sneeze: [2.4, 2.4], space: [2.5, 4.5], stretch: [2.2, 2.2] };
 
 /** 陪它玩的小星星：暖金色的一粒光，绕着月亮飞。 */
 class CompanionStar {
@@ -72,6 +85,8 @@ export class Behaviors {
   paused = false;
   /** 场景 / 彩蛋锁住：不自己玩（切场景时 base() 解锁） */
   locked = false;
+  /** 外部效果（V9-C） */
+  hooks: LifeHooks = {};
 
   constructor(
     private moon: MoonRenderer,
@@ -82,7 +97,7 @@ export class Behaviors {
   ) {
     // 背景里自然出现的流星：没事的时候转头去追
     world.meteors.onSpawn = (m) => {
-      if (this.cur || this.paused || this.idle < 2 || this.interact.isBusy) return;
+      if (this.cur || this.paused || this.locked || this.idle < 2 || this.interact.isBusy) return;
       this.start("meteor", { head: m.head, life: m.life, natural: true });
     };
   }
@@ -101,6 +116,12 @@ export class Behaviors {
   playOpening(kind: Kind = Math.random() < 0.5 ? "star" : "doze") {
     this.opening = { t: 0, kind };
     this.start(kind);
+  }
+
+  /** 直接演一段小日子（彩蛋 / 录片用） */
+  play(kind: Kind, data?: any) {
+    this.stop();
+    this.start(kind, data);
   }
 
   private start(kind: Kind, data?: any) {
@@ -129,7 +150,11 @@ export class Behaviors {
           }
           this.cur.data = { head: () => met.start.clone().addScaledVector(met.dir, met.speed * met.age), life: met.life };
         }
-        m.flashExpr("surprised", 0.5);
+        // 看到流星那一瞬：瞳孔放大；突然出现的（不是自己放的）吓一跳冒「!」
+        if (params.eggs.dilate.enabled) this.hooks.dilate?.();
+        else m.flashExpr("surprised", 0.5);
+        if (data?.natural && params.eggs.symbols.enabled && Math.random() < params.eggs.symbols.bangChance) this.hooks.bang?.();
+        this.cur.data.sharedAt = -1;
         break;
       }
       case "yawn":
@@ -137,7 +162,21 @@ export class Behaviors {
         break;
       case "hum":
         m.flashExpr("content", this.cur.dur);
-        m.playAction("nod", 0.25, "reflex");
+        // 心情好就摇摆（带 ♪）；否则点点头 + 冒 ♪
+        if (params.eggs.sway.enabled && m.emotion.valence >= params.eggs.sway.minValence) this.hooks.sway?.(this.cur.dur);
+        else {
+          m.playAction("nod", 0.25, "reflex");
+          this.cur.data = { noteT: 0.3 };
+        }
+        break;
+      case "sneeze":
+        this.hooks.sneeze?.();
+        break;
+      case "space":
+        this.hooks.blank?.(this.cur.dur - 0.3);
+        break;
+      case "stretch":
+        this.hooks.stretch?.();
         break;
       case "star": {
         const c = m.center;
@@ -148,6 +187,7 @@ export class Behaviors {
       }
       case "doze":
         m.flashExpr("sleeping", this.cur.dur);
+        if (params.eggs.symbols.enabled) this.hooks.zzz?.(true);
         break;
     }
   }
@@ -158,6 +198,7 @@ export class Behaviors {
     const k = this.cur.kind;
     this.cur = null;
     if (k !== "doze") this.moon.lookWeight = 0;
+    if (k === "doze") this.hooks.zzz?.(false);
   }
 
   update(dt: number) {
@@ -176,8 +217,21 @@ export class Behaviors {
       const m = this.moon;
       if (c.kind === "meteor" && c.data) {
         m.lookTarget = c.data.head();
-        m.lookWeight = clamp(c.t / 0.25, 0, 0.85) * (c.t < c.data.life ? 1 : 0);
-        if (c.t > c.data.life && c.t < c.data.life + dt * 1.5) m.flashExpr("happy", 1.0);
+        // 共同注意（V9-C）：追到一半回头看你一眼（「你看！」），再追
+        const A = params.eggs.attend;
+        const share = A.enabled && c.t > A.lookBackAt && c.t < A.lookBackAt + A.lookBackFor;
+        if (share && c.data.sharedAt < 0) {
+          c.data.sharedAt = c.t;
+          m.flashExpr("happy", A.lookBackFor + 0.2);
+        }
+        m.lookWeight = share ? 0 : clamp(c.t / 0.25, 0, 0.85) * (c.t < c.data.life ? 1 : 0);
+        if (c.t > c.data.life && c.t < c.data.life + dt * 1.5) m.flashExpr(params.eggs.starry.enabled ? "starry" : "happy", 1.0);
+      } else if (c.kind === "hum" && c.data?.noteT != null) {
+        c.data.noteT -= dt;
+        if (c.data.noteT <= 0) {
+          this.hooks.note?.();
+          c.data.noteT = 0.7;
+        }
       } else if (c.kind === "star") {
         // 小星星绕着它飞：一个倾斜的椭圆，忽远忽近
         const R = m.radius;
@@ -227,7 +281,17 @@ export class Behaviors {
   private pick(): Kind {
     const hour = this.world.now().getHours();
     const night = hour >= 23 || hour < 6;
-    const w = { ...WEIGHTS, doze: night ? 2.5 : WEIGHTS.doze, yawn: night ? 2 : WEIGHTS.yawn, meteor: this.world.state.night > 0.5 ? WEIGHTS.meteor : 0.2 };
+    const E = params.eggs;
+    const w = {
+      ...WEIGHTS,
+      doze: night ? 2.5 : WEIGHTS.doze,
+      yawn: night ? 2 : WEIGHTS.yawn,
+      meteor: this.world.state.night > 0.5 ? WEIGHTS.meteor : 0.2,
+      sneeze: E.sneeze.enabled ? E.sneeze.idleWeight : 0,
+      space: E.blank.enabled ? E.blank.idleWeight : 0,
+      // 伸懒腰：发呆够久才会
+      stretch: E.stretch.enabled && this.idle > 45 ? WEIGHTS.stretch : 0,
+    };
     const total = Object.values(w).reduce((a, b) => a + b, 0);
     let r = Math.random() * total;
     for (const [k, v] of Object.entries(w) as [Kind, number][]) {

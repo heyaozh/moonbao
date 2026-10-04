@@ -8,6 +8,7 @@ import type { SoundEngine } from "../audio/synth";
 import type { ChatView } from "../chat/chatview";
 import type { DemoBrain } from "../chat/demo";
 import type { Behaviors } from "../moon/behaviors";
+import type { Gestures } from "../moon/gestures";
 import type { MoonInteraction } from "../moon/interact";
 import { params } from "../moon/params";
 import { eggInfo } from "./catalog";
@@ -21,6 +22,7 @@ export interface EggCtx {
   interact: MoonInteraction;
   symbols: SymbolFX;
   sound: SoundEngine;
+  gestures: Gestures;
   stage: EggStage;
   /** 脚本化：录片 / 面板 / ?scene=egg-*（自己搭场景、自己说台词；不看开关） */
   scripted: boolean;

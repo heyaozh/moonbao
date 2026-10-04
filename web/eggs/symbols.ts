@@ -204,11 +204,13 @@ export class SymbolFX {
     this.dustAge[i] = 0;
     this.dustLife[i] = life;
   }
-  /** 一阵风：从 from 往深处吹过月亮，一片尘顺风流 */
-  gust(from: THREE.Vector3, k = 1) {
-    for (let i = 0; i < 90; i++) {
+  /** 一阵风：从 from 往 dir 方向（默认往深处）吹，一片尘顺风流 */
+  gust(from: THREE.Vector3, k = 1, dir?: THREE.Vector3) {
+    const d = (dir ?? new THREE.Vector3(0, 0.12, -1)).clone().normalize();
+    const n = Math.round(90 * Math.min(1, 0.5 + k * 0.5));
+    for (let i = 0; i < n; i++) {
       const p = from.clone().add(new THREE.Vector3((Math.random() - 0.5) * 1.4, (Math.random() - 0.5) * 1.1, (Math.random() - 0.5) * 0.4));
-      const v = new THREE.Vector3((Math.random() - 0.5) * 0.6, 0.3 + Math.random() * 0.5, -(2.2 + Math.random() * 2.5) * k);
+      const v = d.clone().multiplyScalar((2.2 + Math.random() * 2.5) * k).add(new THREE.Vector3((Math.random() - 0.5) * 0.6, (Math.random() - 0.3) * 0.5, (Math.random() - 0.5) * 0.3));
       this.dust(p, v, 0.7 + Math.random() * 0.5);
     }
   }
