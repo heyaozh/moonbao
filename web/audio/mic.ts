@@ -15,6 +15,8 @@ export class Mic {
   silenceMs = 1400;
   /** 说话的阈值（RMS） */
   threshold = 0.02;
+  /** 只量音量、不攒录音（常开听吹气用） */
+  levelOnly = false;
 
   get active() {
     return this.proc != null;
@@ -38,7 +40,7 @@ export class Mic {
     this.quietSince = performance.now();
     this.proc.onaudioprocess = (e) => {
       const x = e.inputBuffer.getChannelData(0);
-      this.chunks.push(new Float32Array(x));
+      if (!this.levelOnly) this.chunks.push(new Float32Array(x));
       let s = 0;
       for (let i = 0; i < x.length; i++) s += x[i] * x[i];
       const r = Math.sqrt(s / x.length);

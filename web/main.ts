@@ -28,6 +28,7 @@ import { EGG_CATALOG } from "./eggs/catalog";
 import { EggStage, playEgg, type EggCtx, type EggOpts } from "./eggs/registry";
 import { SymbolFX } from "./eggs/symbols";
 import "./eggs/batch-a";
+import "./eggs/batch-b";
 
 const q = new URLSearchParams(location.search);
 // 用户在设置里调过的偏好（声音、画面）先盖到 params 上，再建场景
@@ -44,11 +45,19 @@ const unlock = () => void sound.unlock();
 addEventListener("pointerdown", unlock, { once: true });
 addEventListener("keydown", unlock, { once: true });
 
+// ---------- 彩蛋（PLAN V9）：符号管线（手势要用它冒星尘，先建） ----------
+const symbols = new SymbolFX();
+app.stage.front.add(symbols.group);
+
 // ---------- 不聊天也好玩：手势 + 小日子 ----------
+const vibrate = (ms: number) => {
+  if (params.eggs.vibrate.enabled) navigator.vibrate?.(ms);
+};
 const interact = new MoonInteraction(app.moon, app.stage.cam, canvas, {
   onPoke: () => {
     life.notifyActivity();
     sound.poke();
+    vibrate(params.eggs.vibrate.poke);
   },
   onGrab: () => {
     life.notifyActivity();
@@ -58,7 +67,26 @@ const interact = new MoonInteraction(app.moon, app.stage.cam, canvas, {
   onBounce: (v) => {
     life.notifyActivity();
     sound.bounce(v);
+    if (v > 1.5) vibrate(params.eggs.vibrate.bounce);
   },
+  // ── V9-B ──
+  onTickle: () => {
+    life.notifyActivity();
+    sound.giggle();
+  },
+  onRub: () => sound.grab(),
+  onHug: () => {
+    life.notifyActivity();
+    sound.shimmer();
+  },
+  onZone: () => sound.tick(),
+  onSleep: (on) => symbols.zzz(on),
+  onWake: () => sound.shimmer(),
+  onBlow: (k, from) => {
+    sound.gust(k);
+    symbols.gust(from, k);
+  },
+  onSkyTrail: (p) => symbols.dust(p),
   onDizzy: () => sound.dizzy(),
   onTapSky: () => life.notifyActivity(),
   // 在星空上往下拖 = 把远处（更早）的对话拉近
@@ -157,9 +185,7 @@ app.bus.on("engine:transcript", ({ role, text }) => {
     w(text);
   }
 });
-// ---------- 彩蛋（PLAN V9）：符号管线 + 注册表 ----------
-const symbols = new SymbolFX();
-app.stage.front.add(symbols.group);
+// ---------- 彩蛋（PLAN V9）：注册表 ----------
 const eggStage = new EggStage();
 const eggCtx = (scripted: boolean): EggCtx => ({ app, chat, demo, life, interact, symbols, sound, stage: eggStage, scripted });
 const egg = (name: string, opts: EggOpts = {}, scripted = false) => playEgg(name, eggCtx(scripted), opts);
@@ -245,16 +271,78 @@ if (q.has("hour")) app.world.hourOverride = Number(q.get("hour"));
 if (q.has("phase")) params.light.phaseDeg = Number(q.get("phase"));
 app.start();
 
+// ---------- 切回来发现你（V9-B）：离开够久再回来，它正在做自己的事、发现你 ----------
+let hiddenAt = 0;
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    hiddenAt = performance.now();
+    return;
+  }
+  const E = params.eggs.return;
+  if (E.enabled && hiddenAt && (performance.now() - hiddenAt) / 1000 >= E.after && !app.moon.chatMode) {
+    life.playOpening();
+    app.moon.playAction("brighten", 0.4, "reflex");
+  }
+  hiddenAt = 0;
+});
+
 // ---------- 倾斜输入：鼠标（桌面模拟）/ 陀螺仪（真机） ----------
+let hoverAt = 0;
 addEventListener("pointermove", (e) => {
   if (e.pointerType !== "mouse" || interact.isGrabbed) return;
-  app.stage.cam.setPointer((e.clientX / innerWidth) * 2 - 1, (e.clientY / innerHeight) * 2 - 1);
+  const nx = (e.clientX / innerWidth) * 2 - 1;
+  const ny = (e.clientY / innerHeight) * 2 - 1;
+  app.stage.cam.setPointer(nx, ny);
+  // 桌面光标视线（V9-B）：光标靠近它，眼神跟着走
+  const H = params.eggs.hover;
+  if (H.enabled && performance.now() - hoverAt > 80) {
+    const cam = app.stage.cam;
+    const m = cam.project(app.moon.center);
+    const dx = (nx - m.x) * cam.halfW;
+    const dy = (-ny - m.y) * cam.halfH;
+    const rWin = (app.moon.radius * cam.eyeZ) / (cam.eyeZ - app.moon.center.z);
+    if (Math.hypot(dx, dy) < H.within * rWin) {
+      hoverAt = performance.now();
+      interact.lookAtScreen(nx, -ny, 0.5);
+    }
+  }
 });
 const gyroBtn = document.getElementById("gyroBtn") as HTMLButtonElement;
 const DOE = (window as any).DeviceOrientationEvent as { requestPermission?: () => Promise<string> } | undefined;
 function startGyro() {
-  addEventListener("deviceorientation", (e) => app.stage.cam.setOrientation(e.beta, e.gamma));
+  addEventListener("deviceorientation", (e) => {
+    app.stage.cam.setOrientation(e.beta, e.gamma);
+    // 扣下手机（屏幕朝下）= 睡觉（V9-B）
+    if (e.beta != null) interact.setFaceDown(Math.abs(e.beta) > 150);
+  });
 }
+// 吹气（V9-B）：常开麦克风只量音量（不录），一阵持续的大音量 = 吹气。默认关（面板打开），设置里的开关以后再做
+const blowMic = new Mic();
+blowMic.levelOnly = true;
+let blowSince = 0;
+let blowCool = 0;
+setInterval(() => {
+  const B = params.eggs.blow;
+  if (!B.enabled || !B.listen) {
+    if (blowMic.active) void blowMic.stop();
+    return;
+  }
+  if (!blowMic.active) {
+    void blowMic.start();
+    return;
+  }
+  if (ui.isRecording) return;
+  const now = performance.now();
+  const lv = blowMic.level();
+  if (lv > B.threshold) {
+    if (!blowSince) blowSince = now;
+    if (now - blowSince > B.holdMs && now > blowCool) {
+      blowCool = now + 1500;
+      blowSince = 0;
+      interact.blow(Math.min(1, lv * 1.5));
+    }
+  } else blowSince = 0;
+}, 50);
 if (matchMedia("(pointer: coarse)").matches && DOE) {
   if (typeof DOE.requestPermission === "function") {
     gyroBtn.hidden = false; // iOS：必须用户手势
@@ -325,6 +413,7 @@ if (q.get("panel") === "off") panel.root.hidden = true;
 {
   const s = panel.section("彩蛋（V9）");
   panel.buttons(s, EGG_CATALOG.map((e) => [`${e.group} · ${e.label}`, () => egg(e.name, {}, true)]));
+  panel.checkbox(s, "吹气：常开麦克风听", () => params.eggs.blow.listen, (v) => (params.eggs.blow.listen = v));
 }
 {
   const s = panel.section("字");
@@ -508,6 +597,7 @@ declare global {
     __life: Behaviors;
     __egg: (name: string, opts?: EggOpts) => boolean;
     __eggs: typeof EGG_CATALOG;
+    __symbols: SymbolFX;
     __chat: ChatView;
     __demo: DemoBrain;
     __sound: SoundEngine;
@@ -520,6 +610,7 @@ window.__interact = interact;
 window.__life = life;
 window.__egg = (name, opts = {}) => egg(name, opts, true);
 window.__eggs = EGG_CATALOG;
+window.__symbols = symbols;
 window.__app = app;
 window.__params = params;
 window.__scene = (name) => void applyScene(app, name, sceneCtx);

@@ -58,6 +58,7 @@ export const EXPRESSIONS = {
   squeeze: { squeeze: 1, round: 1, open: 0.15, width: 0.35, blush: 0.65 },
   content: { happy: 1, curve: 0.85, width: 0.9, blush: 0.45 },
   wink: { openR: 0, curve: 1, open: 0.25, blush: 0.3 },
+  winkL: { openL: 0, curve: 1, open: 0.25, blush: 0.3 },
   /** 爱心眼：秘密彩蛋专用——它在替你传话，不是它自己爱上用户（不进 exprForEmotion、不给 LLM 选） */
   heart: { heart: 1, curve: 1, open: 0.3, width: 1.05, eyeScale: 1.12, blush: 1 },
 } satisfies Record<string, Partial<FaceParams>>;
@@ -67,7 +68,7 @@ export const EXPR_NAMES = Object.keys(EXPRESSIONS) as ExprName[];
 
 export const EXPR_LABELS: Record<ExprName, string> = {
   neutral: "平常", smile: "微笑", happy: "开心", laugh: "大笑", shy: "害羞", surprised: "惊讶", focused: "专注", thinking: "思考",
-  sleepy: "困", sleeping: "睡着", sad: "难过", pout: "委屈", dizzy: "晕", squeeze: ">.<", content: "满足", wink: "眨眼", heart: "爱心眼",
+  sleepy: "困", sleeping: "睡着", sad: "难过", pout: "委屈", dizzy: "晕", squeeze: ">.<", content: "满足", wink: "眨眼", winkL: "眨左眼", heart: "爱心眼",
 };
 
 export function exprParams(name: ExprName): FaceParams {

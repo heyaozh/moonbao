@@ -460,6 +460,33 @@ const defaults = {
     notes: { enabled: true, size: 0.3, rise: 0.38, life: 1.9 },
     /** 惊讶冒「!」 */
     bang: { enabled: true, size: 0.46, life: 0.95 },
+    // ── V9-B 手势与传感器 ──
+    /** 双指捏：手指靠近多少压扁多少（增益）、最多压多扁、松手弹回的劲 */
+    pinch: { enabled: true, gain: 0.9, max: 0.3, release: 2.2 },
+    /** 挠痒痒：抓着它快速来回——窗口（秒）内来回几次算挠、笑多久 */
+    tickle: { enabled: true, reversals: 4, window: 0.7, laugh: 1.4 },
+    /** 搓：长按不放再来回动；搓多久会困、腮红和光加多少 */
+    rub: { enabled: true, sleepyAfter: 4, blush: 0.5, glow: 0.25 },
+    /** 圈住 = 抱抱：在星空上绕它多少度算一圈、光亮多少 */
+    hug: { enabled: true, degrees: 300, glow: 0.4 },
+    /** 分区戳：眼 / 嘴 / 腮的命中半径（半径的倍数） */
+    zonepoke: { enabled: true, eyeR: 0.17, mouthR: 0.15, cheekR: 0.17 },
+    /** 抓着不动：几秒后看你的手指、几秒后看你 + 慢眨（信任） */
+    hold: { enabled: true, lookFinger: 1.0, trust: 2.2 },
+    /** 两指拧：转角增益、转过多少度害羞 */
+    twist: { enabled: true, gain: 1.0, shyDeg: 90 },
+    /** 扣下手机睡觉：扣下多久才睡（秒）、醒来伸懒腰拉长多少 */
+    facedown: { enabled: true, after: 1.2, stretch: 0.09 },
+    /** 切回来发现你：离开多久（秒）回来才算 */
+    return: { enabled: true, after: 60 },
+    /** 轻摇摇篮：摇多久困、摇多久睡着 */
+    rock: { enabled: true, sleepyAfter: 2, sleepAfter: 5 },
+    /** 吹气：被吹走的力；listen = 常开麦克风听吹气（默认不听，面板可开；设置里的开关以后再做） */
+    blow: { enabled: true, push: 2.4, listen: false, threshold: 0.45, holdMs: 350 },
+    /** 桌面：光标离月亮多近（月亮在屏幕上半径的倍数）视线才跟着 */
+    hover: { enabled: true, within: 1.8 },
+    /** 安卓震动（毫秒；iOS 等 Capacitor） */
+    vibrate: { enabled: true, poke: 12, bounce: 25 },
   },
 
   // ───────────── 性能 ─────────────

@@ -289,6 +289,14 @@ export class SoundEngine {
   tick() {
     this.noiseBurst(4200, 3000, 0.04, 0.2, 4);
   }
+  /** 吹气：一阵风 */
+  gust(k = 1) {
+    this.noiseBurst(300, 1600, 0.55, 0.35 * Math.min(1, k), 0.7);
+  }
+  /** 咯咯笑：几个很快的小音上去再下来 */
+  giggle() {
+    [0, 2, 4, 2, 4].forEach((n, i) => this.bell(this.note(n + 7, 2), 0.13, i * 0.06, "sfx", 2.2));
+  }
 
   // ───────────── 黑洞（语音） ─────────────
   private holeLevel = 0;

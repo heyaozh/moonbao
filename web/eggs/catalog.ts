@@ -23,6 +23,20 @@ export const EGG_CATALOG: EggInfo[] = [
   { name: "zzz", label: "睡觉冒 z z z", group: "A", how: "它打瞌睡时（V9-D 接到小日子）", seconds: 6 },
   { name: "notes", label: "哼歌冒 ♪", group: "A", how: "它哼歌时（V9-C 接到小日子）", seconds: 6 },
   { name: "bang", label: "惊讶冒「!」", group: "A", how: "被吓到 / 流星突然出现（V9-C 接）", seconds: 4 },
+  // ── V9-B · 手势与传感器 ──
+  { name: "pinch", label: "双指捏", group: "B", how: "两根手指捏它（捏开 = 拉长），松手弹回", seconds: 6 },
+  { name: "tickle", label: "挠痒痒", group: "B", how: "抓着它快速来回搓动（小幅度）", seconds: 5 },
+  { name: "rub", label: "搓", group: "B", how: "长按不放，再来回动；搓久了打哈欠", seconds: 7 },
+  { name: "hug", label: "圈住 = 抱抱", group: "B", how: "在星空上绕它画一圈", seconds: 6 },
+  { name: "zonepoke", label: "分区戳（眼 / 嘴 / 腮）", group: "B", how: "戳眼睛、嘴、腮各有反应", seconds: 6 },
+  { name: "hold", label: "抓着不动 3 秒", group: "B", how: "抓住它别动：看你手指 → 看你 → 慢眨", seconds: 6 },
+  { name: "twist", label: "两指拧", group: "B", how: "两指拧它转过去，松手转回来（拧多了害羞）", seconds: 5 },
+  { name: "facedown", label: "扣下手机睡觉 / 拿起伸懒腰", group: "B", how: "手机屏幕朝下扣 1 秒多；拿起来", seconds: 8 },
+  { name: "return", label: "切回来发现你", group: "B", how: "离开 app 一分钟再回来（片子只演「被发现」）", seconds: 6, life: true },
+  { name: "rock", label: "轻摇摇篮", group: "B", how: "轻轻、有节奏地摇手机", seconds: 8 },
+  { name: "blow", label: "吹气", group: "B", how: "对着麦克风吹（默认不听；面板「吹气：常开听」打开）", seconds: 6 },
+  { name: "hover", label: "桌面光标视线", group: "B", how: "电脑上鼠标靠近它，眼神跟着走", seconds: 6 },
+  { name: "vibrate", label: "安卓震动", group: "B", how: "戳 / 撞墙时手机震一下（iOS 等 Capacitor；片子看不出，手机上试）", seconds: 4 },
 ];
 
 export const eggInfo = (name: string) => EGG_CATALOG.find((e) => e.name === name);

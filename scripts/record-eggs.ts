@@ -5,6 +5,7 @@
 //   npm run record:eggs -- --group A --reel   # 一批 + 集锦
 //   npm run record:eggs -- --only secret,zzz  # 指定几条
 //   npm run record:eggs -- --table            # 只打印 docs/checkpoint-v9.md 用的表
+//   npm run record:eggs -- --group B --reel-only  # 不录，只把已有的片拼成集锦
 // 需要：Google Chrome（或 CHROME=可执行文件路径）、ffmpeg、python3。vite 没起的话自己起一个（端口 5178）。
 // 改了参数想重录：同一条命令再跑一遍就行。
 
@@ -37,6 +38,12 @@ if (has("--table")) {
 if (!list.length) {
   console.error("没有匹配的彩蛋");
   process.exit(1);
+}
+if (has("--reel-only")) {
+  const name = group ?? (only ? "custom" : "all");
+  const items = list.filter((e) => existsSync(path.join(ROOT, "snaps/v9", `${e.name}.mp4`))).flatMap((e) => [e.name, `${e.label}|${e.how}`]);
+  const r = spawnSync("python3", ["scripts/reel.py", "--out", `snaps/v9/reel-${name}.mp4`, ...items], { cwd: ROOT, stdio: "inherit" });
+  process.exit(r.status ?? 1);
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
