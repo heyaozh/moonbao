@@ -678,6 +678,18 @@ export class MoonInteraction {
     this.at(1.4, () => this.ev.onBlown?.());
   }
 
+  /** 被你刚发的气泡轻轻拽一下（V9-D）：往气泡那边一带，再被「家」拉回来 */
+  tug(target: THREE.Vector3) {
+    const E = params.eggs.tug;
+    if (!E.enabled) return;
+    const d = target.clone().sub(this.moon.center);
+    d.z = 0;
+    if (d.lengthSq() < 1e-4) return;
+    d.normalize();
+    this.vel.addScaledVector(d, E.pull);
+    this.moon.flashExpr("surprised", 0.4);
+  }
+
   /** 看向屏幕上的某一点（点空白处）：那一点放在比月亮稍深的地方，返回它（世界坐标） */
   lookAtScreen(nx: number, ny: number, seconds = 1.4) {
     const p = this.onPlane(nx, ny, -params.gaze.tapDepth, new THREE.Vector3());

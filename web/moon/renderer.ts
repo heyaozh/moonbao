@@ -98,7 +98,7 @@ export class MoonRenderer implements CharacterRenderer {
   blushBoost = 0;
   glowBoost = 0;
   /** 小动作通道（V9-C，gestures.ts 每帧写）：叠在看你的朝向和位置上；弧度 / 世界单位 */
-  readonly gesture = { yaw: 0, pitch: 0, roll: 0, dy: 0, dz: 0 };
+  readonly gesture = { yaw: 0, pitch: 0, roll: 0, dx: 0, dy: 0, dz: 0 };
   /** 鼓脸 0..1（整体胀大） */
   puff = 0;
   private lightBlinkAt = -1e9;
@@ -194,7 +194,7 @@ export class MoonRenderer implements CharacterRenderer {
       // 视半径 A（窗平面上）= R · eyeZ / (eyeZ − z) → z = eyeZ − R · eyeZ / A；稍微往上一点，给下面的工具栏留地方
       const A = this.paintZoom * cam.halfW;
       this.pos.setTarget(0, cam.halfH * 0.12, cam.eyeZ - (R * cam.eyeZ) / A);
-    } else this.pos.setTarget(home.x + driftX + pose.dx + this.swayX.x, home.y + driftY + pose.dy + this.swayY.x + this.gesture.dy, -home.depth + pose.dz + this.gesture.dz);
+    } else this.pos.setTarget(home.x + driftX + pose.dx + this.swayX.x + this.gesture.dx, home.y + driftY + pose.dy + this.swayY.x + this.gesture.dy, -home.depth + pose.dz + this.gesture.dz);
     this.pos.step(dt);
     // 手势 / 物理的位移直接叠加（不走弹簧：弹墙的反弹要干脆）
     this.body.root.position.set(this.pos.x + this.extra.pos.x, this.pos.y + this.extra.pos.y, this.pos.z + this.extra.pos.z);

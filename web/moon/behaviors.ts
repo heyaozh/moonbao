@@ -21,12 +21,24 @@ export interface LifeHooks {
   stretch?: () => void;
   blank?: (seconds: number) => void;
   sway?: (seconds: number) => void;
+  // ── V9-D ──
+  lazy?: (on: boolean) => void;
+  whistle?: (seconds: number) => void;
+  rollOver?: (hold: number) => void;
+  count?: (points: THREE.Vector3[]) => void;
+  hide?: (side: number, edgeX: number) => void;
+  peek?: () => void;
+  unhide?: (found: boolean) => void;
+  cloud?: (seconds: number) => void;
+  doodle?: () => void;
+  bump?: (target: THREE.Vector3) => void;
+  burst?: (p: THREE.Vector3) => void;
 }
 
-type Kind = "glance" | "meteor" | "yawn" | "hum" | "star" | "doze" | "sneeze" | "space" | "stretch";
+type Kind = "glance" | "meteor" | "yawn" | "hum" | "star" | "doze" | "sneeze" | "space" | "stretch" | "lazy" | "chase" | "count" | "hide" | "cloud" | "doodle";
 
-const WEIGHTS: Record<Kind, number> = { glance: 3, meteor: 2, yawn: 1, hum: 1.2, star: 1.4, doze: 0.6, sneeze: 0.25, space: 1.0, stretch: 0.5 };
-const DUR: Record<Kind, [number, number]> = { glance: [1.2, 2.2], meteor: [1.6, 1.6], yawn: [2.2, 2.2], hum: [3, 4.5], star: [5, 6.5], doze: [8, 14], sneeze: [2.4, 2.4], space: [2.5, 4.5], stretch: [2.2, 2.2] };
+const WEIGHTS: Record<Kind, number> = { glance: 3, meteor: 2, yawn: 1, hum: 1.2, star: 1.4, doze: 0.6, sneeze: 0.25, space: 1.0, stretch: 0.5, lazy: 0.4, chase: 1.0, count: 0.9, hide: 0.5, cloud: 1.5, doodle: 0.3 };
+const DUR: Record<Kind, [number, number]> = { glance: [1.2, 2.2], meteor: [1.6, 1.6], yawn: [2.2, 2.2], hum: [3, 4.5], star: [5, 6.5], doze: [8, 14], sneeze: [2.4, 2.4], space: [2.5, 4.5], stretch: [2.2, 2.2], lazy: [20, 40], chase: [4.6, 4.6], count: [6, 6], hide: [14, 14], cloud: [6, 6], doodle: [5, 5] };
 
 /** 陪它玩的小星星：暖金色的一粒光，绕着月亮飞。 */
 class CompanionStar {
@@ -76,6 +88,10 @@ class CompanionStar {
 
 export class Behaviors {
   readonly star = new CompanionStar();
+  /** 追光斑用的那粒光（贴着玻璃飘过） */
+  readonly toy = new CompanionStar();
+  /** 躲猫猫：躲在哪一边（没躲 = 0） */
+  hideSide = 0;
   private idle = 0;
   private nextIn = 6;
   private cur: { kind: Kind; t: number; dur: number; data?: any } | null = null;
@@ -109,7 +125,22 @@ export class Behaviors {
       this.moon.flashExpr("surprised", 0.5);
       setTimeout(() => this.moon.flashExpr("happy", 1.2), 500);
     }
+    // 偷懒被抓到：吹口哨装没事，飘回来
+    const caughtLazy = this.cur?.kind === "lazy";
     this.stop();
+    if (caughtLazy && params.eggs.whistle.enabled) this.hooks.whistle?.(2.2);
+  }
+
+  /** 躲猫猫：你点了屏幕某处（归一化坐标）——点在它躲的那一边就算找到了 */
+  foundMe(nx: number, _ny: number): boolean {
+    if (this.cur?.kind !== "hide" || !this.hideSide) return false;
+    if (Math.sign(nx) !== this.hideSide || Math.abs(nx) < 0.5) return false;
+    this.hideSide = 0;
+    this.hooks.unhide?.(true);
+    this.cur = null;
+    this.idle = 0;
+    this.nextIn = 8 + Math.random() * 8;
+    return true;
   }
 
   /** 开场：它正在做自己的事，被你发现 */
@@ -188,6 +219,45 @@ export class Behaviors {
       case "doze":
         m.flashExpr("sleeping", this.cur.dur);
         if (params.eggs.symbols.enabled) this.hooks.zzz?.(true);
+        this.cur.data = { rollAt: 2.5 + Math.random() * 2, rolled: false };
+        break;
+      // ── V9-D ──
+      case "lazy":
+        this.hooks.lazy?.(true);
+        break;
+      case "chase": {
+        // 一粒光斑从左往右贴着玻璃飘过，它盯着、撞过去，光斑炸成几粒星
+        const c = m.center;
+        const R = m.radius;
+        this.toy.pos.set(c.x - R * 2.2, c.y - R * 0.3, c.z + R * 1.1);
+        this.toy.alpha = 0;
+        this.cur.data = { bumped: false };
+        break;
+      }
+      case "count": {
+        const pts: THREE.Vector3[] = [];
+        for (let i = 0; i < params.eggs.count.stars; i++) pts.push(new THREE.Vector3(-1.8 + Math.random() * 3.6, 1.2 + Math.random() * 1.6, -3.5));
+        this.hooks.count?.(pts);
+        break;
+      }
+      case "hide": {
+        const side = Math.random() < 0.5 ? -1 : 1;
+        const edge = this.cam.extentAt(-m.center.z).w;
+        this.hideSide = side;
+        this.cur.data = { peeked: false };
+        this.hooks.hide?.(side, edge);
+        break;
+      }
+      case "cloud":
+        this.hooks.cloud?.(this.cur.dur - 0.2);
+        break;
+      case "doodle":
+        this.hooks.doodle?.();
+        try {
+          localStorage.setItem("moonbao.doodle", new Date().toDateString());
+        } catch {
+          /* 私密模式 */
+        }
         break;
     }
   }
@@ -199,6 +269,12 @@ export class Behaviors {
     this.cur = null;
     if (k !== "doze") this.moon.lookWeight = 0;
     if (k === "doze") this.hooks.zzz?.(false);
+    if (k === "lazy") this.hooks.lazy?.(false);
+    if (k === "hide" && this.hideSide) {
+      this.hideSide = 0;
+      this.hooks.unhide?.(false);
+    }
+    if (k === "chase") this.toy.alpha = 0;
   }
 
   update(dt: number) {
@@ -226,6 +302,26 @@ export class Behaviors {
         }
         m.lookWeight = share ? 0 : clamp(c.t / 0.25, 0, 0.85) * (c.t < c.data.life ? 1 : 0);
         if (c.t > c.data.life && c.t < c.data.life + dt * 1.5) m.flashExpr(params.eggs.starry.enabled && Math.random() < 0.6 ? "starry" : "happy", 1.1);
+      } else if (c.kind === "doze" && c.data && !c.data.rolled && c.t > c.data.rollAt && params.eggs.rollover.enabled && c.dur - c.t > 9) {
+        c.data.rolled = true;
+        this.hooks.rollOver?.(3);
+      } else if (c.kind === "chase" && c.data) {
+        // 光斑贴着玻璃从左飘到右；到了它面前它撞过去，光斑炸开
+        const R = m.radius;
+        const center = m.center;
+        const u = Math.min(1, c.t / 3.2);
+        this.toy.pos.set(center.x - R * 2.2 + R * 3.0 * u, center.y - R * 0.3 + Math.sin(c.t * 2.2) * R * 0.25, center.z + R * 1.1);
+        this.toy.alpha = c.data.bumped ? Math.max(0, this.toy.alpha - dt * 6) : Math.min(1, c.t * 2);
+        m.lookTarget = this.toy.pos.clone();
+        m.lookWeight = c.data.bumped ? 0 : 0.85;
+        if (!c.data.bumped && u >= 1) {
+          c.data.bumped = true;
+          this.hooks.bump?.(this.toy.pos.clone());
+          this.hooks.burst?.(this.toy.pos.clone());
+        }
+      } else if (c.kind === "hide" && c.data && !c.data.peeked && c.t > params.eggs.hide.wait) {
+        c.data.peeked = true;
+        this.hooks.peek?.();
       } else if (c.kind === "hum" && c.data?.noteT != null) {
         c.data.noteT -= dt;
         if (c.data.noteT <= 0) {
@@ -255,6 +351,7 @@ export class Behaviors {
         this.start(this.pick());
       }
     }
+    this.toy.update(this.t, this.pixelRatio());
     if (this.opening) {
       this.opening.t += dt;
       // 开场最多演 2.4 秒就「发现你」
@@ -278,6 +375,14 @@ export class Behaviors {
     }, 550);
   }
 
+  private doodledToday() {
+    try {
+      return localStorage.getItem("moonbao.doodle") === new Date().toDateString();
+    } catch {
+      return false;
+    }
+  }
+
   private pick(): Kind {
     const hour = this.world.now().getHours();
     const night = hour >= 23 || hour < 6;
@@ -291,6 +396,13 @@ export class Behaviors {
       space: E.blank.enabled ? E.blank.idleWeight : 0,
       // 伸懒腰：发呆够久才会
       stretch: E.stretch.enabled && this.idle > 45 ? WEIGHTS.stretch : 0,
+      // V9-D：偷懒（难得）、追光斑、数星星（夜里）、躲猫猫（夜里）、看云（白天）、主动写一个字（夜里、很久没人理、每天一次）
+      lazy: E.lazy.enabled ? E.lazy.idleWeight : 0,
+      chase: E.chase.enabled ? E.chase.idleWeight : 0,
+      count: E.count.enabled && this.world.state.night > 0.5 ? E.count.idleWeight : 0,
+      hide: E.hide.enabled && night ? E.hide.idleWeight : 0,
+      cloud: E.cloud.enabled && this.world.state.day > 0.5 ? E.cloud.idleWeight : 0,
+      doodle: E.doodle.enabled && this.world.state.night > 0.5 && this.idle > E.doodle.idleAfter && !this.doodledToday() ? E.doodle.idleWeight : 0,
     };
     const total = Object.values(w).reduce((a, b) => a + b, 0);
     let r = Math.random() * total;
