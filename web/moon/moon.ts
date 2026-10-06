@@ -7,6 +7,7 @@ import * as THREE from "three";
 import { bakeCraters } from "./craters";
 import type { FaceParams } from "./expressions";
 import { params } from "./params";
+import { asset } from "../asset";
 
 const vert = /* glsl */ `
   varying vec3 vObj;
@@ -23,7 +24,7 @@ const vert = /* glsl */ `
 
 const frag = /* glsl */ `
   float sstep(float a, float b, float x) { float t = clamp((x - a) / (b - a), 0.0, 1.0); return t * t * (3.0 - 2.0 * t); }
-  uniform sampler2D uAlbedo, uHeight, uCraters;
+  uniform sampler2D uAlbedo, uHeight, uCraters, uPaint;
   uniform float uCraterDetail;
   uniform mat3 uTexRot, uObjToWorld;
   uniform vec3 uSunDir;
@@ -32,8 +33,9 @@ const frag = /* glsl */ `
   uniform vec3 uLit, uShade, uSSSColor, uRimColor, uSelfGlowColor;
   // 脸
   uniform float uEyeSpacing, uEyeY, uEyeW, uEyeH, uHlX, uHlY, uHlSize, uHl, uGazeRange;
-  uniform float uMouthBelow, uMouthWidth, uMouthTh, uSmileDepth;
-  uniform float uBlushX, uBlushBelow, uBlushR, uBlushFeather, uBlushOpacity;
+  uniform float uHl2, uHl2X, uHl2Y, uHl2Size, uFaceOn, uHatch;
+  uniform float uMouthBelow, uMouthWidth, uMouthTh, uSmileDepth, uCat;
+  uniform float uBlushX, uBlushBelow, uBlushR, uBlushFeather, uBlushOpacity, uBlushAspect;
   uniform vec3 uEyeColor, uMouthColor, uMouthInner, uTongue, uBlushColor;
   uniform vec2 uOpen;       // 左右眼睁开
   uniform float uHappy, uSqueeze, uDizzy, uClosed, uEyeScale, uSad;
@@ -113,6 +115,11 @@ const frag = /* glsl */ `
     float hv = (1.0 - uHappy) * (1.0 - uSqueeze) * (1.0 - uDizzy) * (1.0 - uClosed) * sstep(0.35, 0.8, open);
     vec2 hp = p - vec2(uHlX * ew, uHlY * eh);
     hl = hv * sstep(uHlSize * ew + aa, uHlSize * ew - aa, length(hp)) * cov;
+    // 第二个高光（星星眼）
+    if (uHl2 > 0.001) {
+      vec2 hp2 = p - vec2(uHl2X * ew, uHl2Y * eh);
+      hl = max(hl, uHl2 * hv * sstep(uHl2Size * ew + aa, uHl2Size * ew - aa, length(hp2)) * cov);
+    }
     return cov;
   }
 
@@ -179,8 +186,12 @@ const frag = /* glsl */ `
     col *= mix(0.72, 1.0, clamp(uGlow, 0.0, 1.0)) + max(uGlow - 1.0, 0.0) * 0.3;
     float lightLevel = clamp(direct * uBright + es, 0.0, 1.5);
 
+    // ---- 你画的颜料（G1）：跟着月面走，受同样的明暗，在脸下面 ----
+    vec4 pnt = textureGrad(uPaint, uv, dx, dy);
+    col = mix(col, pnt.rgb * (0.3 + 0.85 * clamp(lightLevel, 0.0, 1.2)), pnt.a);
+
     // ---- 脸：物体局部坐标的正面（+z）上，正交投影到脸平面 ----
-    if (n.z > 0.05) {
+    if (n.z > 0.05 && uFaceOn > 0.5) {
       vec2 p = n.xy;
       float aa = max(fwidth(p.x), fwidth(p.y)) * 1.1;
       vec2 gaze = uGaze * uGazeRange;
@@ -191,9 +202,20 @@ const frag = /* glsl */ `
       float eyes = max(eL, eR);
       // 腮红
       vec2 bc = vec2(uBlushX, uEyeY - uBlushBelow);
-      float bd = min(length(p - vec2(-bc.x, bc.y)), length(p - bc));
+      vec2 bs = vec2(1.0 / max(uBlushAspect, 0.2), 1.0);
+      float bd = min(length((p - vec2(-bc.x, bc.y)) * bs), length((p - bc) * bs));
       float blush = uBlushOpacity * (1.0 - sstep(uBlushR * (1.0 - uBlushFeather), uBlushR, bd));
       col = mix(col, uBlushColor * max(lightLevel, 0.4) * 0.9, blush * 0.9);
+      // 害羞的斜线腮红 ///：腮红里几道短斜线（深一点的粉）
+      if (uHatch > 0.001) {
+        vec2 lc = p.x < 0.0 ? p - vec2(-bc.x, bc.y) : p - bc;
+        float w = uBlushR * 0.36;
+        float sl = lc.x + lc.y * 0.6;
+        float dl = abs(fract(sl / w + 0.5) - 0.5) * w;
+        float line = 1.0 - sstep(uBlushR * 0.055 - aa, uBlushR * 0.055 + aa, dl);
+        float box = (1.0 - sstep(uBlushR * 0.38, uBlushR * 0.46, abs(lc.y))) * (1.0 - sstep(uBlushR * 0.78, uBlushR * 0.9, abs(lc.x)));
+        col = mix(col, uBlushColor * 0.62 * max(lightLevel, 0.4), line * box * uHatch);
+      }
       // 嘴
       vec2 mp = p - vec2(gaze.x * 0.5, uEyeY - uMouthBelow + gaze.y * 0.4);
       float mw = uMouthWidth * 0.5 * uMWidth;
@@ -206,6 +228,12 @@ const frag = /* glsl */ `
       float dDisk = length(mp - vec2(0.0, -(abs(depth) + openD) + R)) - R;
       float dFill = max(dDisk, mp.y - 0.25 * th);
       float dSmile = uMouthOpen > 0.02 ? min(dStroke, dFill) : dStroke;
+      // 猫嘴 ω：两段小微笑弧并排，在中间顶上相接（张嘴时用原来的碗）
+      if (uCat > 0.001) {
+        float hw = mw * 0.5;
+        float dCat = min(sdBow(mp - vec2(hw, 0.0), hw, -depth * 1.1), sdBow(mp + vec2(hw, 0.0), hw, -depth * 1.1)) - th;
+        dSmile = mix(dSmile, dCat, uCat * (1.0 - clamp(uMouthOpen * 3.0, 0.0, 1.0)));
+      }
       // o 型
       vec2 orad = vec2(0.026 + 0.022 * uMouthOpen, 0.02 + 0.04 * uMouthOpen) * mix(1.0, uMWidth, 0.5);
       float dO = sdEllipse(mp + vec2(0.0, 0.01), orad);
@@ -227,6 +255,13 @@ const frag = /* glsl */ `
     gl_FragColor = vec4(col, 1.0);
   }
 `;
+
+/** 还没画过：1×1 全透明 */
+function emptyPaint() {
+  const t = new THREE.DataTexture(new Uint8Array(4), 1, 1, THREE.RGBAFormat);
+  t.needsUpdate = true;
+  return t;
+}
 
 function makeHaloTexture() {
   const S = 256;
@@ -261,6 +296,7 @@ export class MoonBody {
     const mat = new THREE.ShaderMaterial({
       uniforms: {
         uAlbedo: { value: null },
+        uPaint: { value: emptyPaint() },
         uHeight: { value: null },
         uCraters: { value: null },
         uCraterDetail: { value: 0 },
@@ -294,6 +330,14 @@ export class MoonBody {
         uHlY: { value: 0 },
         uHlSize: { value: 0.2 },
         uHl: { value: 1 },
+        uHl2: { value: 0 },
+        uFaceOn: { value: 1 },
+        uHatch: { value: 0 },
+        uHl2X: { value: 0.3 },
+        uHl2Y: { value: -0.3 },
+        uHl2Size: { value: 0.13 },
+        uCat: { value: 0 },
+        uBlushAspect: { value: 1 },
         uGazeRange: { value: 0.06 },
         uMouthBelow: { value: 0.2 },
         uMouthWidth: { value: 0.2 },
@@ -328,14 +372,14 @@ export class MoonBody {
       fragmentShader: frag,
     });
     const loader = new THREE.TextureLoader();
-    loader.load(P.moon.albedoUrl, (t) => {
+    loader.load(asset(P.moon.albedoUrl), (t) => {
       t.colorSpace = THREE.SRGBColorSpace;
       t.wrapS = THREE.RepeatWrapping;
       t.anisotropy = 8;
       mat.uniforms.uAlbedo.value = t;
       this.texReady.albedo = true;
     });
-    loader.load(P.moon.heightUrl, (t) => {
+    loader.load(asset(P.moon.heightUrl), (t) => {
       t.wrapS = THREE.RepeatWrapping;
       mat.uniforms.uHeight.value = t;
       this.texReady.height = true;
@@ -368,6 +412,15 @@ export class MoonBody {
   private tmpV = new THREE.Vector3();
 
   /** 沿世界方向 axis 压扁 amount（>0 压扁，<0 拉长），体积守恒。 */
+  /** 画月亮的画布（G1） */
+  setPaint(tex: THREE.Texture) {
+    this.mesh.material.uniforms.uPaint.value = tex;
+  }
+  /** 物体坐标 → 月面贴图坐标的旋转（和着色器里的 uTexRot 同一个） */
+  get texRot(): THREE.Matrix3 {
+    return this.mesh.material.uniforms.uTexRot.value as THREE.Matrix3;
+  }
+
   setSquash(axis: THREE.Vector3, amount: number, radius: number) {
     const a = Math.max(-0.35, Math.min(0.35, amount));
     const along = 1 - a;
@@ -429,6 +482,14 @@ export class MoonBody {
     u.uHlY.value = F.highlightY;
     u.uHlSize.value = F.highlightSize;
     u.uHl.value = F.highlight;
+    u.uHl2.value = Math.max(F.highlight2, f.sparkle);
+    u.uFaceOn.value = F.visible;
+    u.uHl2X.value = F.highlight2X;
+    u.uHl2Y.value = F.highlight2Y;
+    u.uHl2Size.value = F.highlight2Size;
+    u.uCat.value = Math.max(F.catMouth, f.cat);
+    u.uHatch.value = f.hatch;
+    u.uBlushAspect.value = F.blushAspect;
     u.uGazeRange.value = F.gazeRange;
     u.uMouthBelow.value = F.mouthBelow;
     u.uMouthWidth.value = F.mouthWidth;

@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "setup:whisper": "bash scripts/setup-whisper.sh",
     "test:persona": "tsx scripts/persona-test.ts",
-    "memory": "tsx scripts/memory-cli.ts"
+    "memory": "tsx scripts/memory-cli.ts",
+    "build:site": "bash scripts/build-site.sh"
   },
   "dependencies": {
     "@andresaya/edge-tts": "^1.8.0",
