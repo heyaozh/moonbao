@@ -23,6 +23,14 @@ export interface FaceParams {
   sad: number;
   /** ♥ 爱心眼 0..1（只有秘密彩蛋会用，见 PLAN V9-E） */
   heart: number;
+  /** ✦ 星星眼 0..1（V9-C） */
+  star: number;
+  /** 一滴汗 0..1（听岔了 / 不懂） */
+  sweat: number;
+  /** 闭着嘴吐舌头 0..1 */
+  tongue: number;
+  /** 高光大小倍数（瞳孔放大时亮一点） */
+  shine: number;
   /** 视线（-1..1） */
   gazeX: number;
   gazeY: number;
@@ -43,7 +51,7 @@ export interface FaceParams {
 }
 
 export const NEUTRAL: FaceParams = {
-  openL: 1, openR: 1, happy: 0, squeeze: 0, dizzy: 0, closed: 0, eyeScale: 1, sad: 0, heart: 0, gazeX: 0, gazeY: 0,
+  openL: 1, openR: 1, happy: 0, squeeze: 0, dizzy: 0, closed: 0, eyeScale: 1, sad: 0, heart: 0, star: 0, sweat: 0, tongue: 0, shine: 1, gazeX: 0, gazeY: 0,
   curve: 0.65, open: 0, width: 1, round: 0, wave: 0, blush: 0, sparkle: 0, cat: 0, hatch: 0,
 };
 
@@ -74,6 +82,23 @@ export const EXPRESSIONS = {
   blank: { eyeScale: 0.62, curve: 0.45, width: 0.7 },
   /** 爱心眼：秘密彩蛋专用——它在替你传话，不是它自己爱上用户（不进 exprForEmotion、不给 LLM 选） */
   heart: { heart: 1, curve: 1, open: 0.3, width: 1.05, eyeScale: 1.12, blush: 1 },
+  // ── V9-C ──
+  /** 一滴汗：听岔了 / 不懂，视线飘开、波浪嘴 */
+  sweat: { sweat: 1, curve: 0.15, wave: 0.6, gazeX: 0.3, width: 0.85 },
+  /** 吹口哨：o 嘴、视线飘开（偷懒被抓到装没事） */
+  whistle: { round: 1, open: 0.35, width: 0.6, gazeX: 0.6, gazeY: 0.45, openL: 0.9, openR: 0.9 },
+  /** :P 吐舌头 */
+  tongue: { tongue: 1, curve: 0.9, happy: 0.7, blush: 0.4 },
+  /** 瞳孔放大：看到流星那一瞬 */
+  dilate: { eyeScale: 1.24, shine: 1.5, curve: 0.8, open: 0.15 },
+  /** 耸肩：闭眼 ‿ ‿ + 波浪嘴 */
+  shrug: { closed: 1, wave: 1, curve: 0.2, width: 0.8 },
+  /** 打喷嚏前：眼睛慢慢眯上、嘴张开「啊……啊……」 */
+  presneeze: { openL: 0.4, openR: 0.4, open: 0.55, round: 0.6, width: 0.9 },
+  /** 打哈欠 / 伸懒腰 */
+  yawn: { closed: 1, open: 0.75, round: 0.9, width: 0.8 },
+  /** 认真看你写的字：微微眯眼 */
+  reading: { openL: 0.78, openR: 0.78, eyeScale: 0.96, curve: 0.5, width: 0.9 },
 } satisfies Record<string, Partial<FaceParams>>;
 
 export type ExprName = keyof typeof EXPRESSIONS;
@@ -83,6 +108,7 @@ export const EXPR_LABELS: Record<ExprName, string> = {
   neutral: "平常", smile: "微笑", happy: "开心", laugh: "大笑", shy: "害羞", surprised: "惊讶", focused: "专注", thinking: "思考",
   sleepy: "困", sleeping: "睡着", sad: "难过", pout: "委屈", dizzy: "晕", squeeze: ">.<", content: "满足", wink: "眨眼", winkL: "眨左眼", heart: "爱心眼",
   starry: "星星眼", cheeky: "猫嘴", giggle: "嘿嘿", curious: "好奇", calm: "安心", blank: "发呆",
+  sweat: "一滴汗", whistle: "吹口哨", tongue: "吐舌头", dilate: "瞳孔放大", shrug: "耸肩", presneeze: "要打喷嚏", yawn: "哈欠", reading: "看字",
 };
 
 export function exprParams(name: ExprName): FaceParams {

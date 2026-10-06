@@ -23,6 +23,8 @@ class Exchange {
   draft = false;
   /** 它这一轮的话已经说完 */
   moonDone = false;
+  /** 写完之后已经看过你一眼 */
+  glanced = false;
   /** 排版后需要整体上移多少（字太长压到输入框时） */
   lift = 0;
   /** 这一轮在窗平面上的总高度（气泡 + 字），往上叠历史用 */
@@ -407,12 +409,22 @@ export class ChatView {
     if (cur?.text) {
       const c = cur.text.group.getWorldPosition(new THREE.Vector3());
       this.thinking.gatherTo.copy(c).add(new THREE.Vector3(cam.halfW * 0.7, -0.25, 0));
-      // 写字时月亮看着笔锋一带
+      // 写字时月亮看着笔锋：有笔锋就跟着笔锋走（指挥星星，V9-C），隆重档时 o 嘴专注
+      const K = params.eggs.conduct;
       if (this.t > this.lookUntil && cur.text.finishAt > this.t) {
-        app.moon.lookTarget = c.clone().add(new THREE.Vector3(cam.halfW * 0.8, -0.2, 0));
-        app.moon.lookWeight = 0.45;
+        const cursor = K.enabled && cur.text.cursor ? cur.text.group.localToWorld(cur.text.cursor.clone()) : null;
+        app.moon.lookTarget = cursor ?? c.clone().add(new THREE.Vector3(cam.halfW * 0.8, -0.2, 0));
+        app.moon.lookWeight = cursor ? K.weight : 0.45;
+        if (K.enabled && cur.text.grand && !app.moon.flashing) app.moon.flashExpr("focused", 0.25);
       } else if (this.t > this.lookUntil && app.moon.lookWeight > 0 && cur.text.finishAt <= this.t) {
         app.moon.lookWeight = Math.max(0, app.moon.lookWeight - dt);
+      }
+      // 写完一句看你一眼 + 眨一下：「说完了，到你了」（V9-C）
+      if (params.eggs.glance.enabled && cur.moonDone && !cur.glanced && cur.text.finishAt > 0 && cur.text.finishAt <= this.t) {
+        cur.glanced = true;
+        app.moon.lookWeight = 0;
+        app.moon.blinker.blinkNow(false);
+        app.moon.flashExpr("smile", 1.2);
       }
     }
     this.thinking.update(dt, app.moon.center, app.moon.radius, pr);

@@ -38,8 +38,8 @@ const frag = /* glsl */ `
   uniform float uBlushX, uBlushBelow, uBlushR, uBlushFeather, uBlushOpacity, uBlushAspect;
   uniform vec3 uEyeColor, uMouthColor, uMouthInner, uTongue, uBlushColor;
   uniform vec2 uOpen;       // 左右眼睁开
-  uniform float uHappy, uSqueeze, uDizzy, uClosed, uEyeScale, uSad, uHeart;
-  uniform vec3 uHeartColor;
+  uniform float uHappy, uSqueeze, uDizzy, uClosed, uEyeScale, uSad, uHeart, uStar, uSweat, uSweatT, uTongueOut, uShine;
+  uniform vec3 uHeartColor, uStarColor, uSweatColor;
   uniform vec2 uGaze;
   uniform float uCurve, uMouthOpen, uMWidth, uRound, uWave;
   uniform float uTime;
@@ -115,6 +115,11 @@ const frag = /* glsl */ `
     float hs = eh * 1.75 * (1.0 + 0.06 * uHeart * sin(uTime * 7.0));
     float dHeart = sdHeart((p + vec2(0.0, hs * 0.5)) / hs) * hs;
     d = mix(d, dHeart, uHeart);
+    // ✦ 星星眼：四角星（极坐标半径随角度起伏），慢慢转一点点
+    float sa = atan(p.y, p.x) + uTime * 0.6;
+    float sr = eh * 1.45 * (0.42 + 0.58 * pow(abs(cos(2.0 * sa)), 3.0));
+    float dStar = length(p) - sr;
+    d = mix(d, dStar, uStar);
     d = mix(d, dSq, uSqueeze);
     d = mix(d, dDz, uDizzy);
     // 难过：上眼睑斜切掉内上角
@@ -124,10 +129,11 @@ const frag = /* glsl */ `
       d = max(d, lid);
     }
     float cov = sstep(aa, -aa, d);
-    // 高光：只在圆眼上
+    // 高光：只在圆眼上（瞳孔放大时高光也大一点）
     float hv = (1.0 - uHappy) * (1.0 - uSqueeze) * (1.0 - uDizzy) * (1.0 - uClosed) * sstep(0.35, 0.8, open);
     vec2 hp = p - vec2(uHlX * ew, uHlY * eh);
-    hl = hv * sstep(uHlSize * ew + aa, uHlSize * ew - aa, length(hp)) * cov;
+    float hr = uHlSize * ew * uShine;
+    hl = hv * sstep(hr + aa, hr - aa, length(hp)) * cov;
     // 第二个高光（星星眼）
     if (uHl2 > 0.001) {
       vec2 hp2 = p - vec2(uHl2X * ew, uHl2Y * eh);
@@ -219,6 +225,14 @@ const frag = /* glsl */ `
       float bd = min(length((p - vec2(-bc.x, bc.y)) * bs), length((p - bc) * bs));
       float blush = uBlushOpacity * (1.0 - sstep(uBlushR * (1.0 - uBlushFeather), uBlushR, bd));
       col = mix(col, uBlushColor * max(lightLevel, 0.4) * 0.9, blush * 0.9);
+      // 一滴汗：太阳穴处一滴，慢慢滑下来（uSweatT = 出汗了多久）
+      if (uSweat > 0.01) {
+        vec2 sp = p - vec2(0.46, uEyeY + 0.3 - min(0.16, uSweatT * 0.05));
+        float dDrop = min(sdEllipse(sp, vec2(0.022, 0.03)), sdSegment(sp, vec2(0.0, 0.02), vec2(0.0, 0.058)) - 0.007);
+        float drop = sstep(aa, -aa, dDrop) * uSweat;
+        col = mix(col, uSweatColor, drop * 0.9);
+        col += vec3(1.0) * sstep(0.012 + aa, 0.012 - aa, length(sp - vec2(-0.007, 0.008))) * drop * 0.6;
+      }
       // 害羞的斜线腮红 ///：腮红里几道短斜线（深一点的粉）
       if (uHatch > 0.001) {
         vec2 lc = p.x < 0.0 ? p - vec2(-bc.x, bc.y) : p - bc;
@@ -260,9 +274,17 @@ const frag = /* glsl */ `
       // 张嘴时下半部分是粉色小舌头
       float tongue = inner * (1.0 - sstep(-0.75, -0.2, mp.y / max(abs(depth) + openD, 1e-3))) * clamp(uMouthOpen * 2.0 - 0.3, 0.0, 1.0);
       vec3 mcol = mix(mix(uMouthColor, uMouthInner, inner), uTongue, tongue);
+      // :P 闭着嘴也能吐舌头：嘴线下面探出一小截粉舌头
+      if (uTongueOut > 0.01) {
+        // 舌头要探到嘴线下面去，不然被微笑的弧盖住
+        vec2 tp = mp - vec2(0.01, -(0.04 + 0.045 * uTongueOut));
+        float dT = sdEllipse(tp, vec2(0.032, 0.03 * uTongueOut + 0.004));
+        float tg = sstep(aa, -aa, dT) * uTongueOut;
+        col = mix(col, uTongue * mix(0.5, 1.0, clamp(lightLevel, 0.0, 1.0)), tg);
+      }
       col = mix(col, mcol * mix(0.35, 1.0, clamp(lightLevel, 0.0, 1.0)), mouth);
       // 眼睛：哑光深色 + 小高光（暗部也看得见）；爱心眼是粉红的
-      col = mix(col, mix(uEyeColor, uHeartColor, uHeart), eyes);
+      col = mix(col, mix(mix(uEyeColor, uHeartColor, uHeart), uStarColor, uStar), eyes);
       col += vec3(1.0) * (hlL + hlR) * uHl * mix(0.45, 1.0, clamp(lightLevel, 0.0, 1.0));
     }
     gl_FragColor = vec4(col, 1.0);
@@ -375,6 +397,13 @@ export class MoonBody {
         uSad: { value: 0 },
         uHeart: { value: 0 },
         uHeartColor: { value: new THREE.Color() },
+        uStar: { value: 0 },
+        uStarColor: { value: new THREE.Color() },
+        uSweat: { value: 0 },
+        uSweatT: { value: 0 },
+        uSweatColor: { value: new THREE.Color() },
+        uTongueOut: { value: 0 },
+        uShine: { value: 1 },
         uGaze: { value: new THREE.Vector2() },
         uCurve: { value: 0.6 },
         uMouthOpen: { value: 0 },
@@ -455,7 +484,7 @@ export class MoonBody {
     this.squashNode.matrixWorldNeedsUpdate = true;
   }
 
-  update(opts: { sunDir: THREE.Vector3; earthshine: number; glow: number; face: FaceParams; blush: number; time: number; night: number; radius: number; illuminated: number }) {
+  update(opts: { sunDir: THREE.Vector3; earthshine: number; glow: number; face: FaceParams; blush: number; time: number; night: number; radius: number; illuminated: number; sweatT: number }) {
     const P = params;
     const u = this.mesh.material.uniforms;
     const F = P.face;
@@ -530,6 +559,13 @@ export class MoonBody {
     u.uSad.value = THREE.MathUtils.clamp(f.sad, 0, 1);
     u.uHeart.value = THREE.MathUtils.clamp(f.heart, 0, 1);
     (u.uHeartColor.value as THREE.Color).set(F.heartColor);
+    u.uStar.value = THREE.MathUtils.clamp(f.star, 0, 1);
+    (u.uStarColor.value as THREE.Color).set(F.starColor);
+    u.uSweat.value = THREE.MathUtils.clamp(f.sweat, 0, 1);
+    u.uSweatT.value = opts.sweatT;
+    (u.uSweatColor.value as THREE.Color).set(F.sweatColor);
+    u.uTongueOut.value = THREE.MathUtils.clamp(f.tongue, 0, 1);
+    u.uShine.value = Math.max(0.2, f.shine);
     (u.uGaze.value as THREE.Vector2).set(f.gazeX, f.gazeY);
     u.uCurve.value = f.curve;
     u.uMouthOpen.value = Math.max(0, f.open);

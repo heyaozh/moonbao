@@ -14,6 +14,7 @@ import { Spring, Spring3, approach, clamp, deg, drift } from "./math";
 import { MoonBody } from "./moon";
 import { params } from "./params";
 
+const X = new THREE.Vector3(1, 0, 0);
 const Y = new THREE.Vector3(0, 1, 0);
 const Z = new THREE.Vector3(0, 0, 1);
 
@@ -96,6 +97,12 @@ export class MoonRenderer implements CharacterRenderer {
   /** 手势 / 彩蛋临时加的腮红与光（自己慢慢退掉） */
   blushBoost = 0;
   glowBoost = 0;
+  /** 小动作通道（V9-C，gestures.ts 每帧写）：叠在看你的朝向和位置上；弧度 / 世界单位 */
+  readonly gesture = { yaw: 0, pitch: 0, roll: 0, dy: 0, dz: 0 };
+  /** 鼓脸 0..1（整体胀大） */
+  puff = 0;
+  private lightBlinkAt = -1e9;
+  private sweatT = 0;
   /** 外部（手势 / 物理，V3）叠加的位置偏移与压扁 */
   readonly extra = { pos: new THREE.Vector3(), squashAxis: new THREE.Vector3(0, 1, 0), squash: 0 };
 
@@ -166,8 +173,10 @@ export class MoonRenderer implements CharacterRenderer {
     // 待机漂浮（噪声，不是正弦）
     const ag = 1 + arousal * P.motion.driftArousalGain;
     const tt = (this.t / P.motion.driftPeriod) * ag;
-    const driftX = drift(tt, this.seed) * P.motion.driftAmpX * ag;
-    const driftY = drift(tt + 31.7, this.seed + 1) * P.motion.driftAmpY * ag;
+    // 在听（你在打字）时安定下来：漂浮变小（V9-C）
+    const settle = this.listening && params.eggs.reading.enabled ? P.motion.listenSettle : 1;
+    const driftX = drift(tt, this.seed) * P.motion.driftAmpX * ag * settle;
+    const driftY = drift(tt + 31.7, this.seed + 1) * P.motion.driftAmpY * ag * settle;
     const driftRoll = drift(tt * 0.7 + 63.1, this.seed + 2) * deg(P.motion.driftRollDeg);
 
     // 有重量：相机横移时慢半拍地跟一点
@@ -185,7 +194,7 @@ export class MoonRenderer implements CharacterRenderer {
       // 视半径 A（窗平面上）= R · eyeZ / (eyeZ − z) → z = eyeZ − R · eyeZ / A；稍微往上一点，给下面的工具栏留地方
       const A = this.paintZoom * cam.halfW;
       this.pos.setTarget(0, cam.halfH * 0.12, cam.eyeZ - (R * cam.eyeZ) / A);
-    } else this.pos.setTarget(home.x + driftX + pose.dx + this.swayX.x, home.y + driftY + pose.dy + this.swayY.x, -home.depth + pose.dz);
+    } else this.pos.setTarget(home.x + driftX + pose.dx + this.swayX.x, home.y + driftY + pose.dy + this.swayY.x + this.gesture.dy, -home.depth + pose.dz + this.gesture.dz);
     this.pos.step(dt);
     // 手势 / 物理的位移直接叠加（不走弹簧：弹墙的反弹要干脆）
     this.body.root.position.set(this.pos.x + this.extra.pos.x, this.pos.y + this.extra.pos.y, this.pos.z + this.extra.pos.z);
@@ -224,7 +233,7 @@ export class MoonRenderer implements CharacterRenderer {
       } else toViewer.copy(want);
     }
     const qLook = lookRotation(toViewer, this.tmpQ);
-    const qPose = this.tmpQ2.setFromEuler(this.tmpE.set(-pose.pitch + this.glanceS.y, this.glanceS.x, pose.roll + driftRoll, "YXZ"));
+    const qPose = this.tmpQ2.setFromEuler(this.tmpE.set(-pose.pitch + this.glanceS.y + this.gesture.pitch, this.glanceS.x + this.gesture.yaw, pose.roll + driftRoll + this.gesture.roll, "YXZ"));
     this.rot.target.copy(qLook).multiply(qPose);
     if (qFocusW) this.rot.target.multiply(qFocusW);
     if (this.paintMode) this.rot.target.copy(this.paintRot);
@@ -234,6 +243,7 @@ export class MoonRenderer implements CharacterRenderer {
     // 大角度的转（翻滚、转圈）由动作自己缓动，直接叠在最外层：脸会真的转到背面再转回来
     const qYaw = this.tmpQ3.setFromAxisAngle(Y, pose.yaw);
     this.body.mesh.quaternion.copy(this.rot.q).multiply(qYaw);
+    if (pose.flip) this.body.mesh.quaternion.multiply(this.tmpQFlip.setFromAxisAngle(X, pose.flip));
 
     // ---- 压扁：速度拉伸 + 落地脉冲 + 外部（撞墙 / 被戳） ----
     this.squash.omega = P.motion.scaleOmega;
@@ -242,14 +252,23 @@ export class MoonRenderer implements CharacterRenderer {
     this.squash.target = 0;
     this.squash.step(dt);
     const stretch = clamp(this.pos.vy * P.squash.velocityGain + this.squash.x, -P.squash.max, P.squash.max);
-    if (Math.abs(this.extra.squash) > Math.abs(stretch)) this.body.setSquash(this.extra.squashAxis, this.extra.squash, R);
-    else this.body.setSquash(Y, -stretch, R);
+    const Rp = R * (1 + params.eggs.puff.scale * clamp(this.puff, 0, 1));
+    if (Math.abs(this.extra.squash) > Math.abs(stretch)) this.body.setSquash(this.extra.squashAxis, this.extra.squash, Rp);
+    else this.body.setSquash(Y, -stretch, Rp);
 
     // ---- 光 ----
     this.blushBoost = approach(this.blushBoost, 0, 2.5, dt);
     this.glowBoost = approach(this.glowBoost, 0, 2.5, dt);
     const glowTarget = (pose.glow ?? P.light.glowDefault * (this.listening ? 1.12 : 1)) + this.glowBoost;
     this.glow = approach(this.glow, glowTarget, P.light.glowTau, dt);
+    // 呼吸光（V9-C）：慢慢的一起一伏，活力高呼吸快；想引起注意时闪两下（不走惯性）
+    let glowOut = this.glow;
+    if (params.eggs.breath.enabled) {
+      const period = P.light.breathPeriod / (0.75 + 0.5 * arousal);
+      glowOut += Math.sin((this.t * Math.PI * 2) / period) * P.light.breathAmp * (0.6 + 0.4 * arousal);
+      const b = this.t - this.lightBlinkAt;
+      if (b >= 0 && b < 0.5) glowOut += ((b < 0.12 || (b > 0.24 && b < 0.36)) ? 1 : 0) * params.eggs.breath.blinkStrength;
+    }
 
     // ---- 表情：手势的瞬时表情 > 剧本 / 面板 > 动作 > 情绪 ----
     if (this.flash && this.t > this.flash.until) this.flash = null;
@@ -264,7 +283,8 @@ export class MoonRenderer implements CharacterRenderer {
     // 眨眼：只作用在「睁着的圆眼」上；^ ^ / >< / @ 不眨
     this.blinker.lidCap = pose.lidCap;
     this.blinker.update(dt, this.cur.valence, arousal);
-    const blinkable = 1 - clamp(face.happy + face.squeeze + face.dizzy + face.closed + face.heart, 0, 1);
+    const blinkable = 1 - clamp(face.happy + face.squeeze + face.dizzy + face.closed + face.heart + face.star, 0, 1);
+    this.sweatT = face.sweat > 0.3 ? this.sweatT + dt : 0;
     const open = 1 - (1 - this.blinker.openness) * blinkable;
     const daze = this.blinker.daze;
     const squint = this.blinker.shape === "squint" && name !== "sad" ? 1 : 0;
@@ -280,14 +300,24 @@ export class MoonRenderer implements CharacterRenderer {
     this.body.update({
       sunDir: ctx.world.sunDir,
       earthshine: ctx.world.earthshine,
-      glow: this.glow,
+      glow: glowOut,
       face: out,
       blush,
       time: this.t,
       night: ctx.world.night,
       radius: R,
       illuminated: ctx.world.phase.illuminated,
+      sweatT: this.sweatT,
     });
+  }
+
+  /** 光闪两下（想引起注意：主动开口前） */
+  blinkLight() {
+    this.lightBlinkAt = this.t;
+  }
+  /** 给形变弹簧一个速度：正 = 竖向拉长（伸懒腰），负 = 压扁 */
+  kickStretch(v: number) {
+    this.squash.kick(v);
   }
 
   /** 手势 / 小日子给的瞬时表情（秒），优先级最高。 */
@@ -338,6 +368,7 @@ export class MoonRenderer implements CharacterRenderer {
   private tmpQ = new THREE.Quaternion();
   private tmpQ2 = new THREE.Quaternion();
   private tmpQ3 = new THREE.Quaternion();
+  private tmpQFlip = new THREE.Quaternion();
   private tmpE = new THREE.Euler();
 }
 

@@ -37,6 +37,27 @@ export const EGG_CATALOG: EggInfo[] = [
   { name: "blow", label: "吹气", group: "B", how: "对着麦克风吹（默认不听；面板「吹气：常开听」打开）", seconds: 6 },
   { name: "hover", label: "桌面光标视线", group: "B", how: "电脑上鼠标靠近它，眼神跟着走", seconds: 6 },
   { name: "vibrate", label: "安卓震动", group: "B", how: "戳 / 撞墙时手机震一下（iOS 等 Capacitor；片子看不出，手机上试）", seconds: 4 },
+  // ── V9-C · 动作与表情 ──
+  { name: "attend", label: "共同注意", group: "C", how: "追流星时回头看你一眼「你看！」，再接着追", seconds: 6, life: true },
+  { name: "glance", label: "写完一句看你一眼", group: "C", how: "它每说完一句：看你 + 眨一下", seconds: 9 },
+  { name: "conduct", label: "指挥星星写字", group: "C", how: "写字时视线跟着笔锋；隆重档 o 嘴专注", seconds: 9 },
+  { name: "reading", label: "读你的字 + 听时安定", group: "C", how: "你发长句它飘近眯眼看；你打字时它漂得更稳", seconds: 6 },
+  { name: "breath", label: "呼吸光 + 闪两下", group: "C", how: "待机时光晕慢呼吸；它想引起注意时光闪两下", seconds: 8 },
+  { name: "stretch", label: "伸懒腰", group: "C", how: "睡醒 / 发呆很久之后", seconds: 4 },
+  { name: "shakeoff", label: "抖落星尘", group: "C", how: "翻滚够多圈停稳后、打喷嚏后", seconds: 4 },
+  { name: "sneeze", label: "打喷嚏", group: "C", how: "稀有待机事件；被吹气后有概率", seconds: 5 },
+  { name: "headshake", label: "摇头", group: "C", how: "「这个我不懂诶」时（配一滴汗）", seconds: 4 },
+  { name: "shrug", label: "耸肩", group: "C", how: "不知道的时候", seconds: 4 },
+  { name: "flip", label: "翻跟头", group: "C", how: "撒欢（spin 动作的高档）", seconds: 4 },
+  { name: "sway", label: "摇摆", group: "C", how: "哼歌时心情好就摇，边摇边冒 ♪", seconds: 6 },
+  { name: "puff", label: "鼓脸放气", group: "C", how: "连戳三下鼓脸，两秒后「噗」地放气原谅你", seconds: 6 },
+  { name: "starry", label: "星星眼 ✦ ✦", group: "C", how: "追到流星 / 看到喜欢的", seconds: 5 },
+  { name: "blank", label: "发呆 - -", group: "C", how: "待机时偶尔放空几秒，双眨回神", seconds: 6 },
+  { name: "sweat", label: "一滴汗", group: "C", how: "听岔了 / 问题太难（和 3D 问号一起）", seconds: 5 },
+  { name: "whistle", label: "吹口哨", group: "C", how: "偷懒被抓到装没事（V9-D 接）", seconds: 5 },
+  { name: "tongue", label: "吐舌头 :P", group: "C", how: "被挠痒痒笑完之后", seconds: 4 },
+  { name: "dilate", label: "瞳孔放大", group: "C", how: "看到流星的那一瞬", seconds: 4 },
+  { name: "symbols", label: "zzz / ♪ / ! 接上小日子", group: "C", how: "哼歌冒 ♪、打瞌睡冒 zzz、流星突然出现冒「!」", seconds: 10, life: true },
 ];
 
 export const eggInfo = (name: string) => EGG_CATALOG.find((e) => e.name === name);

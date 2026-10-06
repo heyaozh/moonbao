@@ -19,6 +19,8 @@ export interface Pose {
   roll: number;
   /** 本体（球）自己的转动（弧度），眼睛不跟 */
   bodyYaw: number;
+  /** 前滚翻（绕横轴，弧度，最外层）：spin 高档 */
+  flip: number;
   /** 光：null = 不管，否则 glow 目标 */
   glow: number | null;
   /** 视线目标（-1..1） */
@@ -50,7 +52,7 @@ export interface ActionCtx {
 }
 
 export const IDLE_POSE: Pose = {
-  dx: 0, dy: 0, dz: 0, yaw: 0, pitch: 0, roll: 0, bodyYaw: 0,
+  dx: 0, dy: 0, dz: 0, yaw: 0, pitch: 0, roll: 0, bodyYaw: 0, flip: 0,
   glow: null, gazeX: 0, gazeY: 0, expr: null, lidCap: 1, secondEye: 1, squashPulse: false, blush: null, closeup: 0, done: false,
 };
 
@@ -151,8 +153,16 @@ const fns: Record<Action, ActionFn> = {
 
   spin: (t, k, _c, p) => {
     const a = A.spin;
-    const turns = Math.max(1, Math.round(a.turns * (0.5 + k)));
     const u = Math.min(1, t / a.dur);
+    // 高档 = 翻跟头（V9-C）：前滚一圈，跳得高一点
+    if (params.eggs.flip.enabled && k >= params.eggs.flip.at) {
+      p.flip = Math.PI * 2 * easeInOut(u);
+      p.dy = 0.16 * Math.sin(Math.PI * u);
+      p.expr = "laugh";
+      p.done = u >= 1;
+      return;
+    }
+    const turns = Math.max(1, Math.round(a.turns * (0.5 + k)));
     p.yaw = Math.PI * 2 * turns * easeInOut(u);
     p.bodyYaw = p.yaw;
     p.dy = 0.08 * Math.sin(Math.PI * u);
