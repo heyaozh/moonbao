@@ -79,6 +79,8 @@ export type ServerEvent =
       source: "jev" | "local";
       ms: number;
     }
+  /** 秘密彩蛋命中（PLAN V9-E）：前端按 id 演出；words = 随后以 reply_delta 流下来的回复（先给，写字能预先量宽放大） */
+  | { type: "egg"; id: string; expr: string; action: Action; intensity: number; grand: boolean; words: string }
   | { type: "error"; message: string };
 
 /** 前端 → 服务端 */

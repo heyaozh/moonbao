@@ -43,7 +43,7 @@ const sparkleFrag = /* glsl */ `
   }
 `;
 
-function makePoints(n: number, color: string, order: number, sparkle = false) {
+export function makePoints(n: number, color: string, order: number, sparkle = false) {
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(n * 3), 3));
   g.setAttribute("aSize", new THREE.BufferAttribute(new Float32Array(n), 1));

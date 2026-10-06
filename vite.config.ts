@@ -68,7 +68,8 @@ function snapEndpoint(): Plugin {
           const b64 = body.replace(/^data:image\/\w+;base64,/, "");
           // ?dir=seq-name&name=frame-0001 → snaps/seq-name/frame-0001.jpg（录 GIF 逐帧用）
           const q = new URL(req.url ?? "/", "http://x").searchParams;
-          const sub = (q.get("dir") ?? "").replace(/[^\w.-]/g, "");
+          // 允许一层子目录（snaps/v9/<名字>/）；每段只留字母数字和 -_，所以 ".." 进不来
+          const sub = (q.get("dir") ?? "").split("/").map((s) => s.replace(/[^\w-]/g, "")).filter(Boolean).slice(0, 2).join("/");
           const name = (q.get("name") ?? `snap-${Date.now()}`).replace(/[^\w.-]/g, "");
           const dir = path.join(process.cwd(), "snaps", sub);
           mkdirSync(dir, { recursive: true });

@@ -12,6 +12,8 @@
     "setup:whisper": "bash scripts/setup-whisper.sh",
     "test:persona": "tsx scripts/persona-test.ts",
     "memory": "tsx scripts/memory-cli.ts",
+    "egg": "tsx scripts/egg-cli.ts",
+    "record:eggs": "tsx scripts/record-eggs.ts",
     "build:site": "bash scripts/build-site.sh"
   },
   "dependencies": {

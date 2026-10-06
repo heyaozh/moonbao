@@ -237,6 +237,12 @@ export class ChatView {
     this.pendingHint = { length, text };
   }
 
+  /** 让当前这一轮它的话走隆重档（秘密彩蛋）：要在第一个字到达之前调用 */
+  markGrand() {
+    const e = this.current;
+    if (e?.text && !e.text.fullText) e.text.grand = true;
+  }
+
   /** 它说的话（流式全文）。没有当前轮就开一轮（主动开口）。 */
   moonSay(full: string, done: boolean) {
     // 你在打字、它却先开口（主动说话）：小黑洞先收回去，等它说完再冒

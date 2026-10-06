@@ -21,6 +21,8 @@ export interface FaceParams {
   eyeScale: number;
   /** 八字眉那种下垂的难过眼 0..1 */
   sad: number;
+  /** ♥ 爱心眼 0..1（只有秘密彩蛋会用，见 PLAN V9-E） */
+  heart: number;
   /** 视线（-1..1） */
   gazeX: number;
   gazeY: number;
@@ -41,7 +43,7 @@ export interface FaceParams {
 }
 
 export const NEUTRAL: FaceParams = {
-  openL: 1, openR: 1, happy: 0, squeeze: 0, dizzy: 0, closed: 0, eyeScale: 1, sad: 0, gazeX: 0, gazeY: 0,
+  openL: 1, openR: 1, happy: 0, squeeze: 0, dizzy: 0, closed: 0, eyeScale: 1, sad: 0, heart: 0, gazeX: 0, gazeY: 0,
   curve: 0.65, open: 0, width: 1, round: 0, wave: 0, blush: 0, sparkle: 0, cat: 0, hatch: 0,
 };
 
@@ -69,6 +71,8 @@ export const EXPRESSIONS = {
   curious: { eyeScale: 1.1, round: 1, open: 0.35, width: 0.62, gazeY: 0.25 },
   calm: { openL: 0.6, openR: 0.6, curve: 0.8, width: 0.9, blush: 0.2 },
   blank: { eyeScale: 0.62, curve: 0.45, width: 0.7 },
+  /** 爱心眼：秘密彩蛋专用——它在替你传话，不是它自己爱上用户（不进 exprForEmotion、不给 LLM 选） */
+  heart: { heart: 1, curve: 1, open: 0.3, width: 1.05, eyeScale: 1.12, blush: 1 },
 } satisfies Record<string, Partial<FaceParams>>;
 
 export type ExprName = keyof typeof EXPRESSIONS;
@@ -76,7 +80,7 @@ export const EXPR_NAMES = Object.keys(EXPRESSIONS) as ExprName[];
 
 export const EXPR_LABELS: Record<ExprName, string> = {
   neutral: "平常", smile: "微笑", happy: "开心", laugh: "大笑", shy: "害羞", surprised: "惊讶", focused: "专注", thinking: "思考",
-  sleepy: "困", sleeping: "睡着", sad: "难过", pout: "委屈", dizzy: "晕", squeeze: ">.<", content: "满足", wink: "眨眼",
+  sleepy: "困", sleeping: "睡着", sad: "难过", pout: "委屈", dizzy: "晕", squeeze: ">.<", content: "满足", wink: "眨眼", heart: "爱心眼",
   starry: "星星眼", cheeky: "猫嘴", giggle: "嘿嘿", curious: "好奇", calm: "安心", blank: "发呆",
 };
 

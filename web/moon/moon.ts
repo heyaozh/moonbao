@@ -38,7 +38,8 @@ const frag = /* glsl */ `
   uniform float uBlushX, uBlushBelow, uBlushR, uBlushFeather, uBlushOpacity, uBlushAspect;
   uniform vec3 uEyeColor, uMouthColor, uMouthInner, uTongue, uBlushColor;
   uniform vec2 uOpen;       // 左右眼睁开
-  uniform float uHappy, uSqueeze, uDizzy, uClosed, uEyeScale, uSad;
+  uniform float uHappy, uSqueeze, uDizzy, uClosed, uEyeScale, uSad, uHeart;
+  uniform vec3 uHeartColor;
   uniform vec2 uGaze;
   uniform float uCurve, uMouthOpen, uMWidth, uRound, uWave;
   uniform float uTime;
@@ -72,6 +73,14 @@ const frag = /* glsl */ `
     vec2 sc = vec2(w / R, (R - h) / R);
     return sdArc(p - c, sc, R);
   }
+  // ♥（iq）：尖在原点、顶在 y≈1、最宽约 ±0.6
+  float sdHeart(vec2 p) {
+    p.x = abs(p.x);
+    if (p.y + p.x > 1.0) { vec2 q = p - vec2(0.25, 0.75); return length(q) - sqrt(2.0) / 4.0; }
+    vec2 q1 = p - vec2(0.0, 1.0);
+    vec2 q2 = p - 0.5 * max(p.x + p.y, 0.0);
+    return sqrt(min(dot(q1, q1), dot(q2, q2))) * sign(p.x - p.y);
+  }
   float sdSpiral(vec2 p, float k, float rmax) {
     float r = length(p);
     float a = atan(p.y, p.x) + uTime * 7.0;
@@ -102,6 +111,10 @@ const frag = /* glsl */ `
     float dClosed = sdBow(p - vec2(0.0, eh * 0.1), ew * 1.0, -eh * 0.5) - th * 0.9;
     float d = mix(dOval, dHappy, uHappy);
     d = mix(d, dClosed, uClosed);
+    // ♥ 爱心眼：比眼睛略大，轻轻跳动（只有秘密彩蛋会把 uHeart 推起来）
+    float hs = eh * 1.75 * (1.0 + 0.06 * uHeart * sin(uTime * 7.0));
+    float dHeart = sdHeart((p + vec2(0.0, hs * 0.5)) / hs) * hs;
+    d = mix(d, dHeart, uHeart);
     d = mix(d, dSq, uSqueeze);
     d = mix(d, dDz, uDizzy);
     // 难过：上眼睑斜切掉内上角
@@ -248,8 +261,8 @@ const frag = /* glsl */ `
       float tongue = inner * (1.0 - sstep(-0.75, -0.2, mp.y / max(abs(depth) + openD, 1e-3))) * clamp(uMouthOpen * 2.0 - 0.3, 0.0, 1.0);
       vec3 mcol = mix(mix(uMouthColor, uMouthInner, inner), uTongue, tongue);
       col = mix(col, mcol * mix(0.35, 1.0, clamp(lightLevel, 0.0, 1.0)), mouth);
-      // 眼睛：哑光深色 + 小高光（暗部也看得见）
-      col = mix(col, uEyeColor, eyes);
+      // 眼睛：哑光深色 + 小高光（暗部也看得见）；爱心眼是粉红的
+      col = mix(col, mix(uEyeColor, uHeartColor, uHeart), eyes);
       col += vec3(1.0) * (hlL + hlR) * uHl * mix(0.45, 1.0, clamp(lightLevel, 0.0, 1.0));
     }
     gl_FragColor = vec4(col, 1.0);
@@ -360,6 +373,8 @@ export class MoonBody {
         uClosed: { value: 0 },
         uEyeScale: { value: 1 },
         uSad: { value: 0 },
+        uHeart: { value: 0 },
+        uHeartColor: { value: new THREE.Color() },
         uGaze: { value: new THREE.Vector2() },
         uCurve: { value: 0.6 },
         uMouthOpen: { value: 0 },
@@ -513,6 +528,8 @@ export class MoonBody {
     u.uClosed.value = THREE.MathUtils.clamp(f.closed, 0, 1);
     u.uEyeScale.value = f.eyeScale;
     u.uSad.value = THREE.MathUtils.clamp(f.sad, 0, 1);
+    u.uHeart.value = THREE.MathUtils.clamp(f.heart, 0, 1);
+    (u.uHeartColor.value as THREE.Color).set(F.heartColor);
     (u.uGaze.value as THREE.Vector2).set(f.gazeX, f.gazeY);
     u.uCurve.value = f.curve;
     u.uMouthOpen.value = Math.max(0, f.open);
