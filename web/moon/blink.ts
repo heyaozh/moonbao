@@ -34,12 +34,13 @@ export class Blinker {
     this.nextIn = Math.max(b.minGap, expRandom(mean));
   }
 
-  /** 立刻眨一次（被戳、惊讶用）。 */
-  blinkNow(double = false) {
+  /** 立刻眨一次（被戳、惊讶用）；slow = 慢眨（信任）。 */
+  blinkNow(double = false, slow = false) {
     if (this.phase !== "open") return;
     this.phase = "closing";
     this.t = 0;
     this.pendingDouble = double;
+    this.slow = slow;
   }
 
   /** 动作原语临时强制形态（秒）。 */

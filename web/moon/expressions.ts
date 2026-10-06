@@ -64,6 +64,7 @@ export const EXPRESSIONS = {
   squeeze: { squeeze: 1, round: 1, open: 0.15, width: 0.35, blush: 0.65 },
   content: { happy: 1, curve: 0.85, width: 0.9, blush: 0.45 },
   wink: { openR: 0, curve: 1, open: 0.25, blush: 0.3 },
+  winkL: { openL: 0, curve: 1, open: 0.25, blush: 0.3 },
   // 2026-09-30：来自形象对比与 AI 出图九宫格（assets/ui-concept/moonbao-faces.jpg）
   starry: { eyeScale: 1.22, sparkle: 1, curve: 1, open: 0.22, width: 0.8, blush: 0.45 },
   cheeky: { cat: 1, curve: 1, blush: 0.55, gazeX: 0.15 },
@@ -80,7 +81,7 @@ export const EXPR_NAMES = Object.keys(EXPRESSIONS) as ExprName[];
 
 export const EXPR_LABELS: Record<ExprName, string> = {
   neutral: "平常", smile: "微笑", happy: "开心", laugh: "大笑", shy: "害羞", surprised: "惊讶", focused: "专注", thinking: "思考",
-  sleepy: "困", sleeping: "睡着", sad: "难过", pout: "委屈", dizzy: "晕", squeeze: ">.<", content: "满足", wink: "眨眼", heart: "爱心眼",
+  sleepy: "困", sleeping: "睡着", sad: "难过", pout: "委屈", dizzy: "晕", squeeze: ">.<", content: "满足", wink: "眨眼", winkL: "眨左眼", heart: "爱心眼",
   starry: "星星眼", cheeky: "猫嘴", giggle: "嘿嘿", curious: "好奇", calm: "安心", blank: "发呆",
 };
 

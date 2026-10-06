@@ -93,6 +93,9 @@ export class MoonRenderer implements CharacterRenderer {
   private seed = Math.random() * 1000;
   private glance = { x: 0, y: 0, next: 2 };
   private glanceS = new Spring3(0, 0, 0, 7, 0.75);
+  /** 手势 / 彩蛋临时加的腮红与光（自己慢慢退掉） */
+  blushBoost = 0;
+  glowBoost = 0;
   /** 外部（手势 / 物理，V3）叠加的位置偏移与压扁 */
   readonly extra = { pos: new THREE.Vector3(), squashAxis: new THREE.Vector3(0, 1, 0), squash: 0 };
 
@@ -243,7 +246,9 @@ export class MoonRenderer implements CharacterRenderer {
     else this.body.setSquash(Y, -stretch, R);
 
     // ---- 光 ----
-    const glowTarget = pose.glow ?? P.light.glowDefault * (this.listening ? 1.12 : 1);
+    this.blushBoost = approach(this.blushBoost, 0, 2.5, dt);
+    this.glowBoost = approach(this.glowBoost, 0, 2.5, dt);
+    const glowTarget = (pose.glow ?? P.light.glowDefault * (this.listening ? 1.12 : 1)) + this.glowBoost;
     this.glow = approach(this.glow, glowTarget, P.light.glowTau, dt);
 
     // ---- 表情：手势的瞬时表情 > 剧本 / 面板 > 动作 > 情绪 ----
@@ -270,7 +275,7 @@ export class MoonRenderer implements CharacterRenderer {
       happy: Math.max(face.happy, squint * 0.9),
       eyeScale: face.eyeScale * daze,
     };
-    const blush = clamp(face.blush + Math.max(0, this.cur.valence) * 0.3 + (pose.blush ?? 0), 0, 1);
+    const blush = clamp(face.blush + Math.max(0, this.cur.valence) * 0.3 + (pose.blush ?? 0) + this.blushBoost, 0, 1);
 
     this.body.update({
       sunDir: ctx.world.sunDir,

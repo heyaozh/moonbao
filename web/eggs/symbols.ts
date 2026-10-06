@@ -97,9 +97,18 @@ interface Sym {
   stamp: number;
 }
 
+const DUST = 240;
+
 export class SymbolFX {
   readonly group = new THREE.Group();
   private syms: Sym[] = [];
+  /** 一次性的小光尘：圈住它时手指留下的轨迹、被吹时顺风流过的尘 */
+  private dustPts = makePoints(DUST, "#ffe3b0", 57, true);
+  private dustPos = new Float32Array(DUST * 3);
+  private dustVel = new Float32Array(DUST * 3);
+  private dustAge = new Float32Array(DUST).fill(9);
+  private dustLife = new Float32Array(DUST).fill(1);
+  private dustI = 0;
   private t = 0;
   private center = new THREE.Vector3();
   private radius = 0.8;
@@ -108,6 +117,7 @@ export class SymbolFX {
   private zzzI = 0;
 
   constructor() {
+    this.group.add(this.dustPts);
     for (let i = 0; i < POOL; i++) {
       const points = makePoints(CAP, "#ffe6bd", 58);
       this.group.add(points);
@@ -182,6 +192,27 @@ export class SymbolFX {
     sz.needsUpdate = true;
   }
 
+  /** 在某处留一粒星尘（世界坐标），慢慢散开淡掉 */
+  dust(p: THREE.Vector3, vel?: THREE.Vector3, life = 0.9) {
+    const i = this.dustI++ % DUST;
+    this.dustPos[i * 3] = p.x;
+    this.dustPos[i * 3 + 1] = p.y;
+    this.dustPos[i * 3 + 2] = p.z;
+    this.dustVel[i * 3] = (vel?.x ?? 0) + (Math.random() - 0.5) * 0.12;
+    this.dustVel[i * 3 + 1] = (vel?.y ?? 0) + (Math.random() - 0.5) * 0.12;
+    this.dustVel[i * 3 + 2] = (vel?.z ?? 0) + (Math.random() - 0.5) * 0.06;
+    this.dustAge[i] = 0;
+    this.dustLife[i] = life;
+  }
+  /** 一阵风：从 from 往深处吹过月亮，一片尘顺风流 */
+  gust(from: THREE.Vector3, k = 1) {
+    for (let i = 0; i < 90; i++) {
+      const p = from.clone().add(new THREE.Vector3((Math.random() - 0.5) * 1.4, (Math.random() - 0.5) * 1.1, (Math.random() - 0.5) * 0.4));
+      const v = new THREE.Vector3((Math.random() - 0.5) * 0.6, 0.3 + Math.random() * 0.5, -(2.2 + Math.random() * 2.5) * k);
+      this.dust(p, v, 0.7 + Math.random() * 0.5);
+    }
+  }
+
   /** 睡觉冒 z z z：开着就隔一会儿冒一个，越冒越大、越冒越偏右上 */
   zzz(on: boolean) {
     if (on && !this.zzzOn) {
@@ -213,6 +244,38 @@ export class SymbolFX {
         this.pop("z", { anchor: "head", offset: { x: 0.14 * i, y: 0.05 * i, z: 0 }, size: E.size * (1 + 0.3 * i), life: E.life, rise: E.rise, sway: 0.5, color: "#dfe6ff" });
         this.zzzClock = E.every;
       }
+    }
+    // 星尘
+    {
+      const pa = this.dustPts.geometry.getAttribute("position") as THREE.BufferAttribute;
+      const aa = this.dustPts.geometry.getAttribute("aAlpha") as THREE.BufferAttribute;
+      const sz = this.dustPts.geometry.getAttribute("aSize") as THREE.BufferAttribute;
+      let any = false;
+      for (let i = 0; i < DUST; i++) {
+        const age = (this.dustAge[i] += dt);
+        const life = this.dustLife[i];
+        if (age >= life) {
+          aa.setX(i, 0);
+          continue;
+        }
+        any = true;
+        const j = i * 3;
+        this.dustVel[j] *= Math.exp(-dt * 1.5);
+        this.dustVel[j + 1] *= Math.exp(-dt * 1.5);
+        this.dustVel[j + 2] *= Math.exp(-dt * 1.5);
+        this.dustPos[j] += this.dustVel[j] * dt;
+        this.dustPos[j + 1] += this.dustVel[j + 1] * dt;
+        this.dustPos[j + 2] += this.dustVel[j + 2] * dt;
+        pa.setXYZ(i, this.dustPos[j], this.dustPos[j + 1], this.dustPos[j + 2]);
+        const u = age / life;
+        // 四角小星（和思考的 · · · 同一种精灵）：要够大，光芒才画得出来——5 像素的精灵只剩一个点，暗底上看不见
+        aa.setX(i, (1 - u) * 1.2);
+        sz.setX(i, 11 + 9 * (1 - u));
+      }
+      pa.needsUpdate = aa.needsUpdate = sz.needsUpdate = true;
+      this.dustPts.visible = any;
+      this.dustPts.material.uniforms.uPx.value = pixelRatio;
+      this.dustPts.material.uniforms.uTime.value = this.t;
     }
     const base = new THREE.Vector3();
     for (const s of this.syms) {
