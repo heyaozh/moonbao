@@ -39,6 +39,9 @@ export class GlassUI {
     const zh = lang.startsWith("zh") || new URLSearchParams(location.search).get("lang") === "zh";
     this.input.placeholder = zh ? "想和月亮说些什么…" : "Say something to the moon…";
     this.input.addEventListener("input", () => {
+      // 打字时的小黑洞：有字就冒、删空就收；每敲一个字跳一下
+      this.chat.setDraft(this.input.value.trim().length > 0);
+      this.chat.pulseDraft();
       if (this.input.value.trim()) this.setTyping(true);
       if (this.typingTimer) clearTimeout(this.typingTimer);
       this.typingTimer = setTimeout(() => this.setTyping(false), TYPING_IDLE_MS);

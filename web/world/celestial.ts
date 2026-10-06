@@ -5,6 +5,7 @@
 
 import * as THREE from "three";
 import { params } from "../moon/params";
+import { asset } from "../asset";
 
 /** 两个材质共享的 uniform（同一个对象）；uEyeM / uVis 各自一份（视差可以不同）。 */
 const commonUniforms = () => ({
@@ -24,7 +25,7 @@ const milkyFrag = /* glsl */ `
   uniform mat3 uW2E;
   uniform vec3 uEyeM;
   uniform vec2 uHalf;
-  uniform float uVis, uGain, uBlack, uContrast, uSat, uNebula, uTime;
+  uniform float uVis, uGain, uBlack, uContrast, uSat, uNebula, uTime, uAutoK;
   uniform vec3 uTintLow, uTintMid, uTintHigh, uNebA, uNebB;
   varying vec2 vNdc;
   const float PI = 3.14159265;
@@ -48,6 +49,7 @@ const milkyFrag = /* glsl */ `
     if (dot(dx, dx) + dot(dy, dy) > dot(dx2, dx2) + dot(dy2, dy2)) { dx = dx2; dy = dy2; }
     vec3 c = textureGrad(uTex, uv, dx, dy).rgb;
     c = max(c - uBlack, 0.0) / (1.0 - uBlack);
+    c *= uAutoK; // 自动曝光：画面里的这段银河偏暗时先提亮（上对比之前）
     c = pow(max(c, vec3(0.0)), vec3(uContrast));
     float L = dot(c, vec3(0.2126, 0.7152, 0.0722));
     vec3 chroma = c / max(L, 1e-4);
@@ -132,7 +134,7 @@ export class Celestial {
   private t = 0;
 
   constructor() {
-    const tex = new THREE.TextureLoader().load("/sky/milkyway_4k.jpg");
+    const tex = new THREE.TextureLoader().load(asset("sky/milkyway_4k.jpg"), (t) => this.buildLumMap(t.image as HTMLImageElement));
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.wrapS = THREE.RepeatWrapping;
     tex.anisotropy = 8;
@@ -146,6 +148,7 @@ export class Celestial {
         uVis: { value: 1 },
         uTex: { value: tex },
         uGain: { value: M.gain },
+        uAutoK: { value: 1 },
         uBlack: { value: M.black },
         uContrast: { value: M.contrast },
         uSat: { value: M.saturation },
@@ -196,8 +199,9 @@ export class Celestial {
   }
 
   private async loadStars() {
-    const res = await fetch("/sky/stars.bin");
-    const buf = new Float32Array(await res.arrayBuffer());
+    // 星表：扁平数组 [ra_rad, dec_rad, mag, bv] × N（JSON：任何静态托管都认这个类型）
+    const res = await fetch(asset("sky/stars.json"));
+    const buf = Float32Array.from(((await res.json()) as { data: number[] }).data);
     const n = buf.length / 4;
     const dir = new Float32Array(n * 3);
     const mag = new Float32Array(n);
@@ -227,6 +231,73 @@ export class Celestial {
     g.setAttribute("aPhase", new THREE.BufferAttribute(phase, 1));
   }
 
+  // ---- 银河自动曝光：在 CPU 上用缩小的亮度图估「画面里这段银河有多亮」 ----
+  private lum: Float32Array | null = null;
+  private readonly lumW = 512;
+  private readonly lumH = 256;
+  private autoK = 1;
+  private autoTarget = 1;
+  private autoFor: number[] | null = null;
+  private autoHalf = "";
+
+  private buildLumMap(img: HTMLImageElement) {
+    try {
+      const c = document.createElement("canvas");
+      c.width = this.lumW;
+      c.height = this.lumH;
+      const g = c.getContext("2d", { willReadFrequently: true })!;
+      g.drawImage(img, 0, 0, this.lumW, this.lumH);
+      const d = g.getImageData(0, 0, this.lumW, this.lumH).data;
+      const lin = (v: number) => {
+        const x = v / 255;
+        return x <= 0.04045 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4);
+      };
+      const m = new Float32Array(this.lumW * this.lumH);
+      for (let i = 0; i < m.length; i++) m[i] = 0.2126 * lin(d[i * 4]) + 0.7152 * lin(d[i * 4 + 1]) + 0.0722 * lin(d[i * 4 + 2]);
+      this.lum = m;
+      this.autoFor = null;
+    } catch {
+      this.lum = null; // 读不到像素（跨源等）：不做自动曝光
+    }
+  }
+
+  /** 画面里（窗平面 9×15 个方向）银河亮度的 p90 → 要提亮几倍 */
+  private measureBand(w2e: number[], half: { w: number; h: number }, eyeZ: number) {
+    const M = params.sky.milkyWay;
+    const L = this.lum;
+    if (!L) return 1;
+    const vals: number[] = [];
+    for (let iy = 0; iy < 15; iy++) {
+      for (let ix = 0; ix < 9; ix++) {
+        let dx = ((ix / 8) * 2 - 1) * half.w;
+        let dy = ((iy / 14) * 2 - 1) * half.h;
+        let dz = -eyeZ;
+        const l = Math.hypot(dx, dy, dz);
+        dx /= l;
+        dy /= l;
+        dz /= l;
+        const ex = w2e[0] * dx + w2e[1] * dy + w2e[2] * dz;
+        const ey = w2e[3] * dx + w2e[4] * dy + w2e[5] * dz;
+        const ez = w2e[6] * dx + w2e[7] * dy + w2e[8] * dz;
+        const ra = Math.atan2(ey, ex);
+        const dec = Math.asin(Math.max(-1, Math.min(1, ez)));
+        const u = (((0.5 - ra / (2 * Math.PI)) % 1) + 1) % 1;
+        const v = 0.5 - dec / Math.PI; // 图的行（上 = 北天极）
+        const px = Math.min(this.lumW - 1, Math.floor(u * this.lumW));
+        const py = Math.min(this.lumH - 1, Math.max(0, Math.floor(v * this.lumH)));
+        vals.push(Math.max(0, (L[py * this.lumW + px] - M.black) / (1 - M.black)));
+      }
+    }
+    vals.sort((a, b) => a - b);
+    const p90 = vals[Math.floor(vals.length * 0.9)];
+    return Math.max(1, Math.min(M.autoMax, M.autoTarget / Math.max(p90, 1e-4)));
+  }
+
+  /** 当前的自动曝光倍数（调试面板看） */
+  get milkyAutoK() {
+    return this.autoK;
+  }
+
   /** w2e = 世界方向 → 赤道坐标 的 3×3（行主序 9 个数）。 */
   update(dt: number, w2e: number[], eye: { x: number; y: number }, eyeZ: number, half: { w: number; h: number }, visibility: number, pixelRatio: number) {
     this.t += dt;
@@ -242,6 +313,16 @@ export class Celestial {
     (mu.uEyeM.value as THREE.Vector3).set(eye.x * M.parallax, eye.y * M.parallax, eyeZ);
     mu.uVis.value = visibility;
     mu.uGain.value = M.gain;
+    // 取景变了（每分钟 / 改尺寸）才重估；倍数慢慢过去（1.5 秒），不会一跳
+    const halfKey = `${half.w.toFixed(3)}|${half.h.toFixed(3)}`;
+    if (w2e !== this.autoFor || halfKey !== this.autoHalf) {
+      this.autoFor = w2e;
+      this.autoHalf = halfKey;
+      this.autoTarget = M.auto ? this.measureBand(w2e, half, eyeZ) : 1;
+    }
+    if (!M.auto) this.autoTarget = 1;
+    this.autoK += (this.autoTarget - this.autoK) * (1 - Math.exp(-dt / 1.5));
+    mu.uAutoK.value = this.autoK;
     mu.uBlack.value = M.black;
     mu.uContrast.value = M.contrast;
     mu.uSat.value = M.saturation;
