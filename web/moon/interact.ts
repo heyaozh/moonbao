@@ -21,7 +21,8 @@ export interface InteractEvents {
   onGrab?: () => void;
   onRelease?: (speed: number) => void;
   onDizzy?: () => void;
-  onTapSky?: (nx: number, ny: number) => void;
+  /** 点星空：point = 它要看的那一点（世界坐标，亮起小月亮的位置） */
+  onTapSky?: (nx: number, ny: number, point: THREE.Vector3) => void;
   /** 在星空上上下拖（翻历史）：dy = 这次移动的像素（向下为正） */
   onSkyDrag?: (dy: number) => void;
   // ── V9-B ──
@@ -83,6 +84,11 @@ interface Two {
   sim: { t: number; dur: number; hold: number; to: number; twistDeg: number; done: number } | null;
 }
 
+/** 第二下之后再等这么久：有第三下 = 连戳（鼓脸），没有 = 双击（特写） */
+const TRIPLE_WAIT_MS = 240;
+/** 蹭的时候贴在玻璃前的深度（相对「家」往外） */
+const NUZZLE_Z = 0.55;
+
 export class MoonInteraction {
   /** 手势 / 物理的位移（相对「家」）与速度（世界单位 / 秒） */
   readonly offset = new THREE.Vector3();
@@ -96,8 +102,12 @@ export class MoonInteraction {
   private down: Down | null = null;
   private longTimer: ReturnType<typeof setTimeout> | null = null;
   private nuzzling = false;
-  private lastTapAt = 0;
+  private taps: number[] = [];
+  private closeUpTimer: ReturnType<typeof setTimeout> | null = null;
   private pokes: number[] = [];
+  /** 蹭：跟着手指在玻璃上挪（相对「家」的 x / y） */
+  private nuzzleXY = new THREE.Vector2(0, -0.05);
+  private nuzzleFinger: THREE.Vector3 | null = null;
   private squash = new Spring(0, 16, 0.32);
   private squashAxis = new THREE.Vector3(1, 0, 0);
   private spinAcc = 0;
@@ -211,7 +221,11 @@ export class MoonInteraction {
     this.down = { id: e.pointerId, x: e.clientX, y: e.clientY, px: e.clientX, py: e.clientY, t: performance.now(), onMoon: !!hit, hit, moved: false, wind: 0, lastAng: null, hugged: false, ignore: false };
     if (hit) {
       e.preventDefault();
+      try {
       this.canvas.setPointerCapture?.(e.pointerId);
+    } catch {
+      /* 没有活动指针（合成事件）：不抓也行 */
+    }
       // 长按：贴过来蹭你
       this.longTimer = setTimeout(() => {
         if (this.down && !this.down.moved && this.down.onMoon) this.startNuzzle();
@@ -254,6 +268,16 @@ export class MoonInteraction {
       const n = this.ndc(e);
       this.skyDrag(n.x, n.y, e.clientY - this.lastY, d);
       this.lastY = e.clientY;
+    }
+    // 蹭着的时候手指一挪，它就贴着玻璃跟过去（按手指移动的量，不跳）
+    if (this.nuzzling && this.nuzzleFinger) {
+      const n = this.ndc(e);
+      const p = this.onPlane(n.x, n.y, this.nuzzleFinger.z);
+      const lim = 0.85;
+      this.nuzzleXY.set(
+        clamp(p.x - this.nuzzleFinger.x, -lim * this.cam.halfW, lim * this.cam.halfW),
+        clamp(-0.05 + p.y - this.nuzzleFinger.y, -lim * this.cam.halfH, lim * this.cam.halfH * 0.6)
+      );
     }
     if (this.grabbed) {
       const n = this.ndc(e);
@@ -306,23 +330,40 @@ export class MoonInteraction {
     if (!d.moved && dt < TAP_MS) {
       const n = this.ndc(e);
       if (d.onMoon && d.hit) {
+        // 点 = 戳；双击 = 特写你点的那一点；连戳三下 = 鼓脸（第二下之后等一小会儿，确定没有第三下才特写）
         const now = performance.now();
-        if (now - this.lastTapAt < DOUBLE_MS) {
-          this.lastTapAt = 0;
-          this.moon.playAction("lean_in", 1, "manual");
-          this.moon.flashExpr("surprised", 0.5);
+        this.taps = this.taps.filter((x) => now - x < DOUBLE_MS * 2.2);
+        this.taps.push(now);
+        if (this.closeUpTimer) {
+          clearTimeout(this.closeUpTimer);
+          this.closeUpTimer = null;
+        }
+        if (this.taps.length === 2 && now - this.taps[0] < DOUBLE_MS) {
+          this.poke(d.hit, true);
+          const hit = d.hit.clone();
+          this.closeUpTimer = setTimeout(() => {
+            this.closeUpTimer = null;
+            this.taps = [];
+            this.closeUpAt(hit);
+          }, TRIPLE_WAIT_MS);
         } else {
-          this.lastTapAt = now;
           this.poke(d.hit);
         }
       } else {
-        this.lookAtScreen(n.x, n.y);
-        this.ev.onTapSky?.(n.x, n.y);
+        const pt = this.lookAtScreen(n.x, n.y, params.gaze.wispLife);
+        this.ev.onTapSky?.(n.x, n.y, pt);
       }
     }
   }
 
   // ---------- 各种手势的反应 ----------
+
+  /** 双击特写：把你点的那一点换算到月亮自己的坐标系里，交给渲染器转到正对你 */
+  private closeUpAt(hit: THREE.Vector3) {
+    const local = hit.clone().sub(this.moon.center).normalize();
+    local.applyQuaternion(this.moon.body.mesh.quaternion.clone().invert());
+    this.moon.closeUpAt(local);
+  }
 
   /** 戳到脸的哪一块（眼 / 嘴 / 腮；没戳到脸 = null） */
   private zoneAt(hit: THREE.Vector3): { zone: FaceZone; side: number } | null {
@@ -339,10 +380,19 @@ export class MoonInteraction {
     return null;
   }
 
-  poke(hit: THREE.Vector3) {
+  /** soft = 双击的第二下：只轻轻压一下、记一次戳（为了三连戳能鼓脸），不换表情 */
+  poke(hit: THREE.Vector3, soft = false) {
     const wasAsleep = this.asleep;
     if (wasAsleep) this.wake();
     const n = hit.clone().sub(this.moon.center).normalize();
+    if (soft) {
+      this.squashAxis.set(n.x, n.y, n.z * 0.5).normalize();
+      this.squash.kick(-1.2);
+      this.pokes = this.pokes.filter((x) => this.t - x < 1.6);
+      this.pokes.push(this.t);
+      this.ev.onPoke?.(0.5);
+      return;
+    }
     // 往里压扁（沿命中点法线，偏向屏幕平面，正面戳也看得出来），再往后缩一点
     this.squashAxis.set(n.x, n.y, n.z * 0.5).normalize();
     this.squash.kick(-2.6);
@@ -438,6 +488,14 @@ export class MoonInteraction {
     this.rubT = 0;
     this.rubbedYawn = false;
     this.moon.flashExpr("content", 30);
+    // 记下手指按住的位置（在它贴过来的那个深度上）：之后手指挪多少，它就跟多少
+    this.nuzzleXY.set(0, -0.05);
+    this.nuzzleFinger = null;
+    if (this.down) {
+      const n = this.ndc({ clientX: this.down.x, clientY: this.down.y });
+      const base = this.moon.springPos;
+      this.nuzzleFinger = this.onPlane(n.x, n.y, base.z + NUZZLE_Z);
+    }
   }
   private stopNuzzle() {
     this.nuzzling = false;
@@ -632,11 +690,13 @@ export class MoonInteraction {
     this.moon.flashExpr("surprised", 0.4);
   }
 
-  /** 看向屏幕上的某一点（点空白处） */
+  /** 看向屏幕上的某一点（点空白处）：那一点放在比月亮稍深的地方，返回它（世界坐标） */
   lookAtScreen(nx: number, ny: number, seconds = 1.4) {
-    this.moon.lookTarget = this.onPlane(nx, ny, -3.5, this.moon.lookTarget ?? new THREE.Vector3());
-    this.moon.lookWeight = 0.75;
+    const p = this.onPlane(nx, ny, -params.gaze.tapDepth, new THREE.Vector3());
+    this.moon.lookTarget = p.clone();
+    this.moon.lookWeight = 0.85;
     this.lookUntil = this.t + seconds;
+    return p;
   }
 
   /** 转圈圈（演示剧本用：转够了会晕） */
@@ -807,9 +867,9 @@ export class MoonInteraction {
       this.offset.lerp(target, k);
       this.vel.copy(this.offset).sub(prev).divideScalar(Math.max(dt, 1e-4));
     } else if (this.nuzzling) {
-      // 蹭：往玻璃这边贴近，轻轻左右蹭（搓的时候蹭得更欢）
+      // 蹭：往玻璃这边贴近，跟着手指，轻轻左右蹭（搓的时候蹭得更欢）
       const amp = rubbing ? 0.06 : 0.03;
-      const target = new THREE.Vector3(Math.sin(this.t * 7) * amp, -0.05, 0.55);
+      const target = new THREE.Vector3(this.nuzzleXY.x + Math.sin(this.t * 7) * amp, this.nuzzleXY.y, NUZZLE_Z);
       this.offset.lerp(target, 1 - Math.exp(-dt * 5));
       this.vel.set(0, 0, 0);
     } else {

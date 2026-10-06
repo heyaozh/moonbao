@@ -192,7 +192,7 @@ export class Behaviors {
         m.flashExpr("sleepy", this.cur.dur);
         break;
       case "hum":
-        m.flashExpr("content", this.cur.dur);
+        m.flashExpr(Math.random() < 0.35 ? "calm" : "content", this.cur.dur);
         // 心情好就摇摆（带 ♪）；否则点点头 + 冒 ♪
         if (params.eggs.sway.enabled && m.emotion.valence >= params.eggs.sway.minValence) this.hooks.sway?.(this.cur.dur);
         else {
@@ -301,7 +301,7 @@ export class Behaviors {
           m.flashExpr("happy", A.lookBackFor + 0.2);
         }
         m.lookWeight = share ? 0 : clamp(c.t / 0.25, 0, 0.85) * (c.t < c.data.life ? 1 : 0);
-        if (c.t > c.data.life && c.t < c.data.life + dt * 1.5) m.flashExpr(params.eggs.starry.enabled ? "starry" : "happy", 1.0);
+        if (c.t > c.data.life && c.t < c.data.life + dt * 1.5) m.flashExpr(params.eggs.starry.enabled && Math.random() < 0.6 ? "starry" : "happy", 1.1);
       } else if (c.kind === "doze" && c.data && !c.data.rolled && c.t > c.data.rollAt && params.eggs.rollover.enabled && c.dur - c.t > 9) {
         c.data.rolled = true;
         this.hooks.rollOver?.(3);
@@ -337,7 +337,7 @@ export class Behaviors {
         this.star.alpha = Math.min(1, c.t * 2) * (c.t > c.dur - 0.6 ? Math.max(0, (c.dur - c.t) / 0.6) : 1);
         m.lookTarget = this.star.pos.clone();
         m.lookWeight = 0.8;
-        if (Math.sin(a) > 0.95 && Math.random() < 0.05) m.flashExpr("laugh", 0.5);
+        if (Math.sin(a) > 0.95 && Math.random() < 0.05) m.flashExpr(Math.random() < 0.5 ? "cheeky" : "laugh", 0.7);
       }
       if (c.t >= c.dur) {
         const wasOpening = this.opening && this.opening.kind === c.kind;

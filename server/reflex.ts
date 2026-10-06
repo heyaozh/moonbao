@@ -42,8 +42,8 @@ export function presetFor(r: QuickRead): ReflexPreset {
     question: { expr: "thinking", action: "think_tilt", intensity: 0.6, valence: 0.25, arousal: 0.5 },
     advice: { expr: "focused", action: "think_tilt", intensity: 0.5, valence: 0.2, arousal: 0.45 },
     smalltalk: { expr: "smile", action: "nod", intensity: 0.4, valence: 0.4, arousal: 0.45 },
-    playful: { expr: "laugh", action: "bounce", intensity: 0.7, valence: 0.7, arousal: 0.8 },
-    affection: { expr: "shy", action: "roll", intensity: 0.6, valence: 0.8, arousal: 0.55 },
+    playful: { expr: "cheeky", action: "bounce", intensity: 0.7, valence: 0.7, arousal: 0.8 },
+    affection: { expr: "giggle", action: "roll", intensity: 0.6, valence: 0.8, arousal: 0.55 },
     other: { expr: "focused", action: "lean_in", intensity: 0.45, valence: 0.3, arousal: 0.5 },
   };
   const p = { ...byIntent[r.intent] };
@@ -58,8 +58,15 @@ export function presetFor(r: QuickRead): ReflexPreset {
     Object.assign(p, { expr: "surprised", action: "hide_edge", intensity: 0.3, valence: -0.05, arousal: 0.5 });
   } else if (r.emotion === "tired") {
     Object.assign(p, { expr: "content", action: "lean_in", intensity: 0.4, valence: 0.2, arousal: 0.25 });
-  } else if ((r.emotion === "joyful" || r.emotion === "excited") && r.intent !== "question") {
+  } else if (r.emotion === "excited" && r.intent !== "question") {
+    // 好消息、兴奋：星星眼
+    Object.assign(p, { expr: "starry", action: "bounce", valence: 0.75, arousal: 0.8 });
+  } else if (r.emotion === "joyful" && r.intent !== "question") {
     Object.assign(p, { expr: "happy", action: "bounce", valence: 0.7, arousal: 0.75 });
+  } else if (r.emotion === "curious" && (r.intent === "sharing" || r.intent === "question" || r.intent === "smalltalk")) {
+    Object.assign(p, { expr: "curious", action: "lean_in", intensity: 0.45 });
+  } else if (r.emotion === "calm" && r.intent === "smalltalk") {
+    Object.assign(p, { expr: "calm", action: "nod", intensity: 0.3, valence: 0.45, arousal: 0.3 });
   }
   if (r.crisis > 0.5) Object.assign(p, { expr: "sad", action: "lean_in", intensity: 0.7, valence: -0.2, arousal: 0.4 });
   return p;
