@@ -23,7 +23,11 @@ import { CHARACTER_NAME } from "./config";
 import { Behaviors } from "./moon/behaviors";
 import { EXPR_LABELS, EXPR_NAMES } from "./moon/expressions";
 import { MoonInteraction } from "./moon/interact";
+import { GazeWisp } from "./moon/wisp";
+import { MoonPaint } from "./moon/paint";
+import { PaintBar } from "./ui/paintbar";
 import { params } from "./moon/params";
+import { applyLooks, LOOKS } from "./moon/looks";
 import { EGG_CATALOG } from "./eggs/catalog";
 import { EggStage, playEgg, type EggCtx, type EggOpts } from "./eggs/registry";
 import { SymbolFX } from "./eggs/symbols";
@@ -31,6 +35,8 @@ import "./eggs/batch-a";
 import "./eggs/batch-b";
 
 const q = new URLSearchParams(location.search);
+// 形象对比：?look=baby 或 ?look=baby,mochi（见 web/moon/looks.ts）
+if (q.get("look")) applyLooks(q.get("look")!.split(","));
 // 用户在设置里调过的偏好（声音、画面）先盖到 params 上，再建场景
 loadUserSettings();
 const profile = loadProfile();
@@ -88,12 +94,21 @@ const interact = new MoonInteraction(app.moon, app.stage.cam, canvas, {
   },
   onSkyTrail: (p) => symbols.dust(p),
   onDizzy: () => sound.dizzy(),
-  onTapSky: () => life.notifyActivity(),
+  onTapSky: (_nx, _ny, p) => {
+    life.notifyActivity();
+    wisp.show(p);
+    sound.wisp();
+  },
   // 在星空上往下拖 = 把远处（更早）的对话拉近
   onSkyDrag: (dy) => chat.scrollBy(dy / 260),
 });
 const life = new Behaviors(app.moon, app.world, app.stage.cam, interact, () => app.stage.pixelRatio);
 app.stage.back.add(life.star.points);
+// 点星空：那里亮起一颗半透明的小月亮，它转头看过去
+const wisp = new GazeWisp();
+app.stage.front.add(wisp.mesh);
+// 画月亮（G1）：画布一直贴在月亮上；进入画画模式时它飞到眼前、放大
+const paint = new MoonPaint(app.moon, app.stage.cam, canvas);
 
 // ---------- 对话画面 + 演示大脑 + 玻璃界面 ----------
 if (q.has("font") && q.get("font")! in FONT_CANDIDATES) fontState.en = q.get("font") as FontName;
@@ -144,12 +159,39 @@ const sendProfile = () => {
   if (app.client.connected) app.client.send({ type: "profile", userName: profile.userName || undefined, moonName: profile.moonName || undefined });
 };
 const settings = new SettingsSheet(profile, () => app.world.location.label);
+settings.onOpenChange = (open) => ui.settingsBtn.classList.toggle("open", open);
+// 画月亮：手势交给画笔，聊天栏换成工具栏
+const paintBar = new PaintBar(paint, () => uiLang(profile));
+const chatbar = document.getElementById("chatbar")!;
+let gyroWasShown = false;
+settings.onPaint = () => paint.enter();
+paint.onEnter = () => {
+  interact.enabled = false;
+  interact.offset.set(0, 0, 0);
+  interact.vel.set(0, 0, 0);
+  chatbar.hidden = true;
+  // 陀螺仪提示按钮在后面才声明（场景可能在那之前就进画画模式）：这里直接按 id 找
+  const g = document.getElementById("gyroBtn");
+  gyroWasShown = !!g && !g.hidden;
+  if (g) g.hidden = true;
+  paintBar.show();
+  sound.tick();
+};
+paint.onExit = () => {
+  interact.enabled = true;
+  chatbar.hidden = false;
+  const g = document.getElementById("gyroBtn");
+  if (g && gyroWasShown) g.hidden = false;
+  paintBar.hide();
+  sound.shimmer();
+};
+paint.onChange = () => paintBar.refresh();
 /** 界面文字跟着设置里的语言走（默认跟系统语言；用户主要是英文） */
 function applyLang() {
   const zh = uiLang(profile) === "zh";
   if (!onboarding?.active) ui.input.placeholder = zh ? "想和月亮说些什么…" : "Say something to the moon…";
   ui.voiceBtn.setAttribute("aria-label", zh ? "按住说话" : "Hold to talk");
-  ui.settingsBtn.setAttribute("aria-label", zh ? "设置" : "Settings");
+  ui.settingsBtn.setAttribute("aria-label", zh ? "菜单" : "Menu");
   const g = document.querySelector("#gyroBtn span");
   if (g) g.textContent = zh ? "倾斜手机，看看盒子里面" : "Tilt your phone to look inside";
   document.documentElement.lang = zh ? "zh-CN" : "en";
@@ -219,7 +261,8 @@ app.bus.on("user:barge", () => {
 app.bus.on("engine:reflex", (r) => {
   if (sentAt) pushLat("reflex", performance.now() - sentAt);
   app.moon.setEmotion(r.valence, r.arousal);
-  app.moon.flashExpr(r.expr as any, 2.4);
+  // 服务端可能比前端新（多了表情名）：认识的才做
+  if ((EXPR_NAMES as string[]).includes(r.expr)) app.moon.flashExpr(r.expr as (typeof EXPR_NAMES)[number], 2.4);
   app.moon.playAction(r.action, r.intensity, "brain");
   if (r.confused) chat.thinking.showQuestion(true);
 });
@@ -252,16 +295,18 @@ app.onTick((dt) => {
   sound.mood = app.moon.emotion.valence;
   sound.update(dt);
   interact.update(dt);
+  wisp.update(dt);
+  paint.update();
   demo.update(dt);
   chat.update(dt);
   ui.update();
   eggStage.now = app.moon.time;
   symbols.update(dt, app.moon.center, app.moon.radius, app.stage.pixelRatio);
-  // 聊天时、演彩蛋时不自己玩
-  life.paused = app.moon.chatMode || eggStage.active;
+  // 聊天时、画画时、演彩蛋时不自己玩
+  life.paused = app.moon.chatMode || paint.active || eggStage.active;
   life.update(dt);
 });
-const sceneCtx: SceneCtx = { chat, demo, life, onboarding, interact, egg: (name) => egg(name, {}, true) };
+const sceneCtx: SceneCtx = { chat, demo, life, onboarding, interact, paint, egg: (name) => egg(name, {}, true) };
 
 const sceneName = applyScene(app, q.get("scene") ?? "real", sceneCtx);
 // 第一次打开：首次见面；以后打开：它正在做自己的事，被你发现
@@ -343,9 +388,18 @@ setInterval(() => {
     }
   } else blowSince = 0;
 }, 50);
-if (matchMedia("(pointer: coarse)").matches && DOE) {
+// 嵌在别的网页里（介绍网站的实机演示）：拿不到陀螺仪授权，不显示那个提示
+const embedded = (() => {
+  try {
+    return window.self !== window.top;
+  } catch {
+    return true;
+  }
+})();
+if (matchMedia("(pointer: coarse)").matches && DOE && !embedded) {
   if (typeof DOE.requestPermission === "function") {
-    gyroBtn.hidden = false; // iOS：必须用户手势
+    gyroBtn.hidden = paint.active; // iOS：必须用户手势（画画时先不打扰，退出后再出现）
+    gyroWasShown = true;
     gyroBtn.onclick = async () => {
       try {
         if ((await DOE.requestPermission!()) === "granted") startGyro();
@@ -400,6 +454,20 @@ if (q.get("panel") === "off") panel.root.hidden = true;
   panel.checkbox(s, "星空左右镜像", () => params.sky.mirrorEastWest, (v) => (params.sky.mirrorEastWest = v));
 }
 {
+  // 形象：选一个脸 + 一个月面（可以叠）；「原样」两个都还原
+  const lk = panel.section("形象");
+  const cur = { face: "current", body: "" };
+  const lookNow = () => applyLooks([cur.face, cur.body].filter(Boolean));
+  panel.buttons(
+    lk,
+    [
+      ["原样", () => ((cur.face = "current"), (cur.body = ""), lookNow())],
+      ...Object.entries(LOOKS)
+        .filter(([k]) => k !== "current")
+        .map(([k, L]) => [L.label, () => (L.kind === "body" ? (cur.body = k) : (cur.face = k), lookNow())] as [string, () => void]),
+    ],
+    true
+  );
   const s = panel.section("表情");
   panel.buttons(s, [["自动", () => (app.moon.exprOverride = null)], ...EXPR_NAMES.map((n) => [EXPR_LABELS[n], () => (app.moon.exprOverride = n)] as [string, () => void])], true);
   const a = panel.section("动作");
@@ -607,6 +675,7 @@ window.__sound = sound;
 window.__chat = chat;
 window.__demo = demo;
 window.__interact = interact;
+(window as unknown as { __paint: MoonPaint }).__paint = paint;
 window.__life = life;
 window.__egg = (name, opts = {}) => egg(name, opts, true);
 window.__eggs = EGG_CATALOG;

@@ -34,11 +34,17 @@ export interface FaceParams {
   wave: number;
   /** 腮红额外加深 0..1 */
   blush: number;
+  /** 星星眼：第二个高光 0..1（2026-09-30 用户：星星眼、猫嘴都要做一个表情） */
+  sparkle: number;
+  /** 猫嘴 ω 0..1 */
+  cat: number;
+  /** 害羞的斜线腮红 /// 0..1（AI 出图九宫格第 7 格） */
+  hatch: number;
 }
 
 export const NEUTRAL: FaceParams = {
   openL: 1, openR: 1, happy: 0, squeeze: 0, dizzy: 0, closed: 0, eyeScale: 1, sad: 0, heart: 0, gazeX: 0, gazeY: 0,
-  curve: 0.65, open: 0, width: 1, round: 0, wave: 0, blush: 0,
+  curve: 0.65, open: 0, width: 1, round: 0, wave: 0, blush: 0, sparkle: 0, cat: 0, hatch: 0,
 };
 
 export const EXPRESSIONS = {
@@ -59,6 +65,13 @@ export const EXPRESSIONS = {
   content: { happy: 1, curve: 0.85, width: 0.9, blush: 0.45 },
   wink: { openR: 0, curve: 1, open: 0.25, blush: 0.3 },
   winkL: { openL: 0, curve: 1, open: 0.25, blush: 0.3 },
+  // 2026-09-30：来自形象对比与 AI 出图九宫格（assets/ui-concept/moonbao-faces.jpg）
+  starry: { eyeScale: 1.22, sparkle: 1, curve: 1, open: 0.22, width: 0.8, blush: 0.45 },
+  cheeky: { cat: 1, curve: 1, blush: 0.55, gazeX: 0.15 },
+  giggle: { hatch: 1, curve: 1, open: 0.45, width: 0.95, blush: 0.6 },
+  curious: { eyeScale: 1.1, round: 1, open: 0.35, width: 0.62, gazeY: 0.25 },
+  calm: { openL: 0.6, openR: 0.6, curve: 0.8, width: 0.9, blush: 0.2 },
+  blank: { eyeScale: 0.62, curve: 0.45, width: 0.7 },
   /** 爱心眼：秘密彩蛋专用——它在替你传话，不是它自己爱上用户（不进 exprForEmotion、不给 LLM 选） */
   heart: { heart: 1, curve: 1, open: 0.3, width: 1.05, eyeScale: 1.12, blush: 1 },
 } satisfies Record<string, Partial<FaceParams>>;
@@ -69,6 +82,7 @@ export const EXPR_NAMES = Object.keys(EXPRESSIONS) as ExprName[];
 export const EXPR_LABELS: Record<ExprName, string> = {
   neutral: "平常", smile: "微笑", happy: "开心", laugh: "大笑", shy: "害羞", surprised: "惊讶", focused: "专注", thinking: "思考",
   sleepy: "困", sleeping: "睡着", sad: "难过", pout: "委屈", dizzy: "晕", squeeze: ">.<", content: "满足", wink: "眨眼", winkL: "眨左眼", heart: "爱心眼",
+  starry: "星星眼", cheeky: "猫嘴", giggle: "嘿嘿", curious: "好奇", calm: "安心", blank: "发呆",
 };
 
 export function exprParams(name: ExprName): FaceParams {

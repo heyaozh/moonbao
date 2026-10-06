@@ -3,7 +3,7 @@
 | 网页文件（`web/public/sky/`，入库） | 来源（`assets/sky/raw/`，gitignore） | 授权 / 署名 |
 |---|---|---|
 | `milkyway_4k.jpg`（4096×2048，2.0 MB） | NASA SVS [Deep Star Maps 2020](https://svs.gsfc.nasa.gov/4851) 的「仅银河」图层 `milkyway_2020_4k.exr`（celestial 坐标，34.7 MB） | 署名：NASA/Goddard Space Flight Center Scientific Visualization Studio. Gaia DR2: ESA/Gaia/DPAC. |
-| `stars.bin`（5044 颗，≤ 6 等，81 kB） | [d3-celestial](https://github.com/ofrohn/d3-celestial) `data/stars.6.json`（Hipparcos） | BSD-3-Clause（`raw/d3-celestial-LICENSE`） |
+| `stars.bin` / `stars.json`（5044 颗，≤ 6 等，81 kB / 129 kB；网页读 JSON） | [d3-celestial](https://github.com/ofrohn/d3-celestial) `data/stars.6.json`（Hipparcos） | BSD-3-Clause（`raw/d3-celestial-LICENSE`） |
 
 重生成：
 ```bash
