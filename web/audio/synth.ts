@@ -297,6 +297,10 @@ export class SoundEngine {
   giggle() {
     [0, 2, 4, 2, 4].forEach((n, i) => this.bell(this.note(n + 7, 2), 0.13, i * 0.06, "sfx", 2.2));
   }
+  /** 点星空亮起小月亮：一个很轻的高音 */
+  wisp() {
+    this.bell(this.note(7, 2), 0.13, 0, "sfx", 1.6);
+  }
 
   // ───────────── 黑洞（语音） ─────────────
   private holeLevel = 0;

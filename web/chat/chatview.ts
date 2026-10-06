@@ -19,6 +19,8 @@ class Exchange {
   born = 0;
   bubbleText = "";
   voice = false;
+  /** 打字时的小黑洞（还没发出去的一轮） */
+  draft = false;
   /** 它这一轮的话已经说完 */
   moonDone = false;
   /** 写完之后已经看过你一眼 */
@@ -45,6 +47,12 @@ export class ChatView {
   /** 语音时的音量（0..1），驱动黑洞的漩涡与生长 */
   private voiceLevel = 0;
   private voiceStart = 0;
+  /** 打字时的小黑洞：想要（输入框里有字）/ 已经有了 / 每敲一个字跳一下 */
+  private draftWant = false;
+  private draftEx: Exchange | null = null;
+  private draftPulse = 0;
+  /** 收回去的黑洞：缩成一点再拿掉 */
+  private dying: Exchange[] = [];
 
   constructor(private app: App) {
     const s = app.stage;
@@ -75,9 +83,24 @@ export class ChatView {
   }
 
   /** 开一轮新对话。userText = null：它主动开口（没有气泡，走隆重档）。 */
-  startExchange(userText: string | null, opts: { grand?: boolean; voice?: boolean } = {}): Exchange {
+  startExchange(userText: string | null, opts: { grand?: boolean; voice?: boolean; draft?: boolean } = {}): Exchange {
     const now = this.t;
     this.lastChatAt = now;
+    // 打字时已经有一个小黑洞：发出去 = 字凝结进这个黑洞，它长成气泡（不另开一轮）
+    if (userText != null && this.draftEx) {
+      const e = this.draftEx;
+      this.draftEx = null;
+      this.draftWant = false;
+      e.draft = false;
+      e.born = now;
+      this.setBubbleText(e, userText);
+      if (e.bubble) {
+        this.app.moon.lookTarget = e.bubble.mesh.getWorldPosition(new THREE.Vector3());
+        this.app.moon.lookWeight = 0.55;
+        this.lookUntil = now + 1.4;
+      }
+      return e;
+    }
     // 上一轮它还没说完（你抢话了）：那句收尾留在原来那一轮里，后面流进来的字不会串到新的一轮
     const cur = this.ex[0];
     if (cur && cur.text && !cur.moonDone) {
@@ -99,10 +122,11 @@ export class ChatView {
     const s = this.app.stage;
     s.front.add(e.group);
     const cam = s.cam;
-    if (userText != null || opts.voice) {
+    if (userText != null || opts.voice || opts.draft) {
       e.bubble = new BlackHoleBubble(() => s.rtBack.texture);
       e.group.add(e.bubble.mesh);
       e.voice = !!opts.voice;
+      e.draft = !!opts.draft;
       if (userText) this.setBubbleText(e, userText);
       else {
         e.bubble.setHalf(0.06, 0.06);
@@ -153,11 +177,41 @@ export class ChatView {
     this.layout(e);
   }
 
-  /** 语音：开一个会长大的小黑洞 */
+  /** 语音：开一个会长大的小黑洞（打字的小黑洞已经在了，就用它） */
   startVoice() {
     this.voiceStart = this.t;
     this.voiceLevel = 0;
+    if (this.draftEx) {
+      const e = this.draftEx;
+      this.draftEx = null;
+      this.draftWant = false;
+      e.draft = false;
+      e.voice = true;
+      return e;
+    }
     return this.startExchange(null, { voice: true });
+  }
+
+  /** 输入框里有没有字：有 → 冒出一个小黑洞（等它把话说完再冒，不打断它）；删空 → 收回去 */
+  setDraft(on: boolean) {
+    this.draftWant = on;
+  }
+  /** 敲了一个字：小黑洞跳一下 */
+  pulseDraft() {
+    this.draftPulse = 1;
+  }
+
+  private cancelDraft() {
+    const e = this.draftEx;
+    this.draftEx = null;
+    if (!e) return;
+    const i = this.ex.indexOf(e);
+    if (i >= 0) {
+      this.ex.splice(i, 1);
+      for (const x of this.ex) if (x.index > e.index) x.index -= 1;
+    }
+    e.bubble?.formTo(0);
+    this.dying.push(e);
   }
   setVoiceLevel(v: number) {
     this.voiceLevel = v;
@@ -193,6 +247,8 @@ export class ChatView {
 
   /** 它说的话（流式全文）。没有当前轮就开一轮（主动开口）。 */
   moonSay(full: string, done: boolean) {
+    // 你在打字、它却先开口（主动说话）：小黑洞先收回去，等它说完再冒
+    if (this.draftEx) this.cancelDraft();
     let e = this.current;
     // 这一轮它已经说完了（例如主动开口、久别归来）→ 开新的一轮，没有气泡
     if (!e || e.moonDone || e.voice) e = this.startExchange(null);
@@ -267,6 +323,21 @@ export class ChatView {
     }
     this.scroll += (this.scrollTarget - this.scroll) * (1 - Math.exp(-dt * 4));
 
+    // 打字时的小黑洞：它还在说 / 在想 / 你在说话时先不冒（不打断它）；删空了就收回去
+    if (this.draftWant && !this.draftEx) {
+      const cur = this.current;
+      const busy = !!cur && (cur.voice || (!cur.moonDone && this.t - cur.born < 20));
+      if (!busy) this.draftEx = this.startExchange(null, { draft: true });
+    } else if (!this.draftWant && this.draftEx) this.cancelDraft();
+    this.draftPulse = Math.max(0, this.draftPulse - dt * 3.5);
+    for (const e of [...this.dying]) {
+      e.bubble?.update(dt, this.t, b.w, b.h, (b.h / (2 * cam.halfH)) * (cam.eyeZ / (cam.eyeZ + params.writer.depth)), 0);
+      if (!e.bubble || e.bubble.form < 0.03) {
+        this.dying.splice(this.dying.indexOf(e), 1);
+        this.dispose(e);
+      }
+    }
+
     // 往上叠：第 k 轮的顶 = 第 k-1 轮的顶 + 第 k 轮自己（按它那个深度缩小后）的高度 + 一点空隙
     const shrinkAt = (k: number) => (cam.eyeZ + params.writer.depth) / (cam.eyeZ + params.writer.depth + C.stepDepth * Math.max(0, k));
     const cum: number[] = [0];
@@ -306,8 +377,14 @@ export class ChatView {
       const pxPerUnit = (b.h / (2 * cam.halfH)) * (cam.eyeZ / (cam.eyeZ - z));
       if (e.bubble) {
         const bb = e.bubble;
-        bb.round = e.voice;
-        if (e.voice) {
+        bb.round = e.voice || e.draft;
+        if (e.draft) {
+          // 打字：小小的、慢慢转，敲一个字跳一下；不长大
+          const r = C.draftRadius + this.draftPulse * C.draftPulse;
+          bb.setHalf(r, r);
+          bb.swirl += (0.22 + this.draftPulse * 0.9 - bb.swirl) * (1 - Math.exp(-dt * 6));
+          this.layout(e);
+        } else if (e.voice) {
           // 说得越久越大，音量让漩涡转得更急（圆形的奇点，识别完再变成装下字的气泡）
           const grow = Math.min(1, (this.t - this.voiceStart) / 6);
           const r = 0.06 + grow * 0.22 + this.voiceLevel * 0.035;

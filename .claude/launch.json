@@ -4,14 +4,35 @@
     {
       "name": "moon-web",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["vite", "--host"],
+      "runtimeArgs": [
+        "vite",
+        "--host"
+      ],
       "port": 5176
     },
     {
       "name": "moon-brain",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["tsx", "watch", "server/index.ts"],
+      "runtimeArgs": [
+        "tsx",
+        "watch",
+        "server/index.ts"
+      ],
       "port": 8787
+    },
+    {
+      "name": "moon-site",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "preview",
+        "--outDir",
+        "../dist-site",
+        "--port",
+        "5190",
+        "--strictPort"
+      ],
+      "port": 5190
     }
   ]
 }

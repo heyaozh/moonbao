@@ -1,0 +1,396 @@
+<title>Moonbao</title>
+<meta name="description" content="Moonbao: a little moon that lives in your phone's night sky. It answers with its eyes, its light, and words written in stars.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Figtree:wght@400;500;600&family=Dancing+Script:wght@500;600&display=swap">
+<style>
+  /* Layout: one night-sky column. The live moon (a real phone-sized app) anchors the hero;
+     below it the page reads like a short field guide: what it does, how it behaves, how it is made, where it is. */
+  :root {
+    --night: #070b1d;
+    --night-2: #0d1532;
+    --ink: #ebeefa;
+    --ink-dim: #aab2d2;
+    --moon: #ffd7a5;
+    --glow: #ffe6c0;
+    --glass: rgba(235, 238, 250, 0.06);
+    --line: rgba(235, 238, 250, 0.13);
+    --blush: #ff8fa3;
+    --display: "Young Serif", Georgia, "Songti SC", serif;
+    --body: "Figtree", -apple-system, "PingFang SC", "Hiragino Sans GB", system-ui, sans-serif;
+    --hand: "Dancing Script", "Snell Roundhand", cursive;
+    --step--1: clamp(0.82rem, 0.8rem + 0.1vw, 0.88rem);
+    --step-0: clamp(1rem, 0.96rem + 0.2vw, 1.08rem);
+    --step-1: clamp(1.2rem, 1.1rem + 0.5vw, 1.4rem);
+    --step-2: clamp(1.6rem, 1.3rem + 1.4vw, 2.3rem);
+    --step-3: clamp(2.2rem, 1.6rem + 2.8vw, 3.6rem);
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--night);
+    background-image:
+      radial-gradient(120% 60% at 70% -10%, rgba(255, 215, 165, 0.10), transparent 60%),
+      radial-gradient(90% 50% at 10% 110%, rgba(63, 111, 214, 0.18), transparent 70%),
+      linear-gradient(180deg, var(--night) 0%, var(--night-2) 55%, var(--night) 100%);
+    color: var(--ink);
+    font: 400 var(--step-0)/1.6 var(--body);
+    -webkit-font-smoothing: antialiased;
+  }
+  #stars { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+  .wrap { position: relative; z-index: 1; max-width: 1120px; margin: 0 auto; padding-inline: max(16px, 4vw); }
+  a { color: var(--moon); }
+  :focus-visible { outline: 2px solid var(--moon); outline-offset: 3px; border-radius: 6px; }
+
+  /* 顶栏 */
+  header.top { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 22px; flex-wrap: wrap; }
+  .mark { font: 400 1.35rem/1 var(--display); letter-spacing: 0.01em; color: var(--ink); text-decoration: none; }
+  .mark b { font-weight: 400; color: var(--moon); }
+  .tonight { display: flex; align-items: center; gap: 10px; color: var(--ink-dim); font-size: var(--step--1); }
+  .tonight canvas { width: 22px; height: 22px; }
+  .lang { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+  .lang button { all: unset; cursor: pointer; padding: 6px 12px; font-size: var(--step--1); color: var(--ink-dim); }
+  .lang button[aria-pressed="true"] { background: rgba(255, 215, 165, 0.16); color: var(--ink); }
+
+  /* 双语：<span data-l="en">…</span><span data-l="zh">…</span> */
+  body:not([data-lang="zh"]) [data-l="zh"], body[data-lang="zh"] [data-l="en"] { display: none !important; }
+
+  /* 首屏 */
+  .hero { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: clamp(28px, 5vw, 72px); align-items: center; padding-block: clamp(20px, 5vw, 56px) clamp(40px, 7vw, 88px); }
+  .eyebrow { font-size: var(--step--1); letter-spacing: 0.14em; text-transform: uppercase; color: var(--moon); margin: 0 0 14px; }
+  h1 { font: 400 var(--step-3)/1.08 var(--display); margin: 0 0 22px; text-wrap: balance; letter-spacing: -0.01em; }
+  h1 .hand { font-family: var(--hand); font-weight: 600; color: var(--moon); font-size: 1.12em; letter-spacing: 0; }
+  .lead { font-size: var(--step-1); line-height: 1.5; color: var(--ink); max-width: 34ch; margin: 0 0 18px; text-wrap: pretty; }
+  .sub { color: var(--ink-dim); max-width: 46ch; margin: 0 0 26px; }
+  .cta { display: flex; gap: 12px; flex-wrap: wrap; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 20px; border-radius: 999px; text-decoration: none; font-weight: 500; font-size: var(--step-0); border: 1px solid var(--line); color: var(--ink); background: var(--glass); backdrop-filter: blur(8px); }
+  .btn.primary { background: linear-gradient(180deg, rgba(255, 215, 165, 0.95), rgba(255, 200, 140, 0.9)); color: #1d1406; border-color: transparent; box-shadow: 0 6px 30px rgba(255, 215, 165, 0.25); }
+  .status { display: inline-flex; align-items: center; gap: 8px; margin-top: 22px; font-size: var(--step--1); color: var(--ink-dim); }
+  .status i { width: 8px; height: 8px; border-radius: 50%; background: var(--moon); box-shadow: 0 0 10px var(--moon); }
+
+  /* 手机框：里面是真的 app（演示剧本），载不出来就换成视频 */
+  .phone { justify-self: center; width: min(360px, 100%); }
+  .device { position: relative; aspect-ratio: 390 / 820; width: 100%; max-width: 100%; border-radius: 44px; padding: 10px; background: linear-gradient(160deg, #20263f, #0b0f22); box-shadow: 0 40px 100px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08), inset 0 0 0 1px rgba(255, 255, 255, 0.06); }
+  .screen { position: relative; width: 100%; height: 100%; border-radius: 35px; overflow: hidden; background: #000; }
+  .screen iframe, .screen video, .screen img { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; object-fit: cover; display: block; }
+  .screen .poster { transition: opacity 0.6s ease; }
+  .screen.live .poster { opacity: 0; pointer-events: none; }
+  .caption { margin: 14px 4px 0; font-size: var(--step--1); color: var(--ink-dim); text-align: center; text-wrap: balance; }
+
+  /* 分节 */
+  section { padding-block: clamp(44px, 7vw, 96px); border-top: 1px solid var(--line); }
+  h2 { font: 400 var(--step-2)/1.15 var(--display); margin: 0 0 12px; text-wrap: balance; }
+  .intro { color: var(--ink-dim); max-width: 60ch; margin: 0 0 36px; }
+
+  /* 特色：视频 + 两三行字，三列，窄屏一列 */
+  .features { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(22px, 3vw, 36px); }
+  .feature { min-width: 0; }
+  .clip { position: relative; aspect-ratio: 540 / 1130; max-width: 100%; border-radius: 22px; overflow: hidden; background: #000; border: 1px solid var(--line); }
+  .clip video, .clip img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .clip .play { position: absolute; inset: auto 12px 12px auto; width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line); background: rgba(7, 11, 29, 0.55); color: var(--ink); cursor: pointer; display: grid; place-items: center; backdrop-filter: blur(6px); }
+  .feature h3 { font: 500 var(--step-1)/1.25 var(--body); margin: 16px 0 6px; }
+  .feature p { margin: 0; color: var(--ink-dim); }
+
+  /* 温柔的设计：它会说的话用它的手写体 */
+  .gentle { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px 44px; }
+  .gentle div { min-width: 0; padding-block: 6px; }
+  .gentle h3 { font: 500 var(--step-0)/1.35 var(--body); margin: 0 0 4px; }
+  .gentle p { margin: 0; color: var(--ink-dim); }
+  .quote { grid-column: 1 / -1; font: 600 var(--step-2)/1.3 var(--hand); color: var(--moon); margin: 8px 0 18px; text-shadow: 0 0 22px rgba(255, 215, 165, 0.35); }
+
+  /* 怎么做的 / 进度 */
+  .two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(28px, 5vw, 64px); }
+  .two > div { min-width: 0; }
+  .facts { margin: 0; display: grid; gap: 14px; }
+  .facts dt { font-weight: 600; }
+  .facts dd { margin: 2px 0 0; color: var(--ink-dim); }
+  .timeline { list-style: none; margin: 0; padding: 0; display: grid; gap: 18px; }
+  .timeline li { display: grid; grid-template-columns: 8.5em minmax(0, 1fr); gap: 16px; }
+  .timeline time { color: var(--moon); font-variant-numeric: tabular-nums; font-size: var(--step--1); padding-top: 3px; }
+  .timeline b { font-weight: 600; }
+  .timeline p { margin: 2px 0 0; color: var(--ink-dim); }
+  .timeline .now time::after { content: " ●"; }
+
+  footer { padding-block: 40px 56px; border-top: 1px solid var(--line); color: var(--ink-dim); font-size: var(--step--1); display: grid; gap: 8px; }
+
+  @media (max-width: 860px) {
+    .hero { grid-template-columns: minmax(0, 1fr); }
+    .features { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .two, .gentle { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 520px) {
+    .features { grid-template-columns: minmax(0, 1fr); }
+    .timeline li { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+  }
+</style>
+
+<canvas id="stars" aria-hidden="true"></canvas>
+<div class="wrap">
+  <header class="top">
+    <a class="mark" href="#top" aria-label="Moonbao">moon<b>bao</b></a>
+    <div class="tonight" id="tonight" title="The real moon tonight">
+      <canvas id="phaseIcon" width="44" height="44" aria-hidden="true"></canvas>
+      <span id="phaseText"></span>
+    </div>
+    <div class="lang" role="group" aria-label="Language">
+      <button type="button" id="lang-en" aria-pressed="true">EN</button>
+      <button type="button" id="lang-zh" aria-pressed="false">中文</button>
+    </div>
+  </header>
+
+  <main id="top">
+    <div class="hero">
+      <div>
+        <p class="eyebrow"><span data-l="en">A companion for the night</span><span data-l="zh">陪你度过夜晚的小伙伴</span></p>
+        <h1>
+          <span data-l="en">A little <span class="hand">moon</span> that lives in your phone’s night sky.</span>
+          <span data-l="zh">一个住在你手机夜空里的小<span class="hand">月亮</span>。</span>
+        </h1>
+        <p class="lead">
+          <span data-l="en">It doesn’t talk. It answers with its eyes, its light, and words spelled out by shooting stars.</span>
+          <span data-l="zh">它不说话，用眼神、光，和流星拼成的字回应你。</span>
+        </p>
+        <p class="sub">
+          <span data-l="en">It remembers what you told it, and tomorrow it might ask how it went. Poke it, fling it, name it. It’s soft, springy and always happy to see you.</span>
+          <span data-l="zh">它记得你说过的话，第二天会想起来问你后来怎么样。戳它、甩它、给它起名字——它软软的、弹弹的，永远很高兴见到你。</span>
+        </p>
+        <div class="cta">
+          <a class="btn primary" href="#demo" id="toDemo"><span data-l="en">Say hi to it</span><span data-l="zh">跟它打个招呼</span></a>
+          <a class="btn" href="#what"><span data-l="en">See what it does</span><span data-l="zh">看看它会做什么</span></a>
+        </div>
+        <p class="status"><i aria-hidden="true"></i><span data-l="en">In development · phone first · small beta planned for early 2027</span><span data-l="zh">开发中 · 手机优先 · 计划 2027 年初小范围内测</span></p>
+      </div>
+
+      <div class="phone" id="demo">
+        <div class="device">
+          <div class="screen" id="screen">
+            <iframe id="live" title="Live Moonbao demo" loading="lazy" allow="autoplay"></iframe>
+            <video class="poster" id="posterVideo" src="media/hero.mp4" poster="media/hero.jpg" autoplay muted loop playsinline></video>
+          </div>
+        </div>
+        <p class="caption" id="demoCaption">
+          <span data-l="en">Live demo: tap the moon, drag it, or type a few words. It runs a scripted brain here, not the real one.</span>
+          <span data-l="zh">实机演示：点它、拖它，或者打几个字。这里用的是演示剧本，不是真的大脑。</span>
+        </p>
+      </div>
+    </div>
+
+    <section id="what" aria-labelledby="what-h">
+      <h2 id="what-h"><span data-l="en">Small things that make it feel alive</span><span data-l="zh">让它像活着的小事</span></h2>
+      <p class="intro"><span data-l="en">Every clip below is recorded from the app itself.</span><span data-l="zh">下面每一段都是 app 里实际录下来的画面。</span></p>
+      <div class="features">
+        <article class="feature">
+          <div class="clip"><video src="media/writing.mp4" poster="media/writing.jpg" autoplay muted loop playsinline></video></div>
+          <h3><span data-l="en">Words written in stars</span><span data-l="zh">星星写的字</span></h3>
+          <p><span data-l="en">Its replies are spelled out by hundreds of tiny lights that fly in from the sky, one stroke at a time.</span><span data-l="zh">它的回答由几百颗从天边飞来的小光点一笔一笔拼出来。</span></p>
+        </article>
+        <article class="feature">
+          <div class="clip"><video src="media/hero.mp4" poster="media/hero.jpg" autoplay muted loop playsinline></video></div>
+          <h3><span data-l="en">Your words in a tiny black hole</span><span data-l="zh">你的话，装在一个小黑洞里</span></h3>
+          <p><span data-l="en">What you type floats in a bubble whose edge bends the starlight behind it, like a real gravitational lens.</span><span data-l="zh">你打的字浮在一个气泡里，气泡边缘会把背后的星光弯过去，像真正的引力透镜。</span></p>
+        </article>
+        <article class="feature">
+          <div class="clip"><video src="media/voice.mp4" poster="media/voice.jpg" autoplay muted loop playsinline></video></div>
+          <h3><span data-l="en">Speak, and watch it listen</span><span data-l="zh">说出来，看它听</span></h3>
+          <p><span data-l="en">Hold the voice button: a small black hole grows while you talk, then your words settle into it.</span><span data-l="zh">按住语音键说话，一个小黑洞随着你说话慢慢长大，说完你的话落进它里面。</span></p>
+        </article>
+        <article class="feature">
+          <div class="clip"><video src="media/play.mp4" poster="media/play.jpg" autoplay muted loop playsinline></video></div>
+          <h3><span data-l="en">Soft, springy, pokeable</span><span data-l="zh">软软的，弹弹的，可以戳</span></h3>
+          <p><span data-l="en">Poke it, fling it against the edges of the screen, spin it until it’s dizzy. It always bounces back.</span><span data-l="zh">戳它、把它甩到屏幕边上、转到它晕——它总会弹回来。</span></p>
+        </article>
+        <article class="feature">
+          <div class="clip"><video src="media/onboarding.mp4" poster="media/onboarding.jpg" autoplay muted loop playsinline></video></div>
+          <h3><span data-l="en">You name each other</span><span data-l="zh">你们互相起名字</span></h3>
+          <p><span data-l="en">On the first night it wakes up, asks what to call you, and lets you give it a name of its own.</span><span data-l="zh">第一次见面，它醒过来，问你该怎么称呼你，再请你给它起个名字。</span></p>
+        </article>
+        <article class="feature">
+          <div class="clip"><img src="media/sky.jpg" alt="The moon above a band of the Milky Way" loading="lazy"></div>
+          <h3><span data-l="en">The real sky above you</span><span data-l="zh">你头顶真实的星空</span></h3>
+          <p><span data-l="en">The Milky Way, the stars, sunrise and the moon’s phase follow your time and place. Tilt the phone and the sky has depth.</span><span data-l="zh">银河、星星、日出日落和月相都跟着你所在的时间和地点走；倾斜手机，天空是有深度的。</span></p>
+        </article>
+      </div>
+    </section>
+
+    <section aria-labelledby="gentle-h">
+      <h2 id="gentle-h"><span data-l="en">Gentle by design</span><span data-l="zh">温柔，是设计出来的</span></h2>
+      <div class="gentle">
+        <p class="quote"><span data-l="en">“No rush. I’m right here.”</span><span data-l="zh">「不急的，我就在这儿。」</span></p>
+        <div>
+          <h3><span data-l="en">It doesn’t lecture</span><span data-l="zh">不说教</span></h3>
+          <p><span data-l="en">No advice unless you ask for it, no life lessons, no to-do lists. It keeps you company.</span><span data-l="zh">你不问，它就不给建议；不讲大道理，不列清单。它只是陪着你。</span></p>
+        </div>
+        <div>
+          <h3><span data-l="en">No guilt</span><span data-l="zh">不让你愧疚</span></h3>
+          <p><span data-l="en">If you stay away, it simply misses you. It never wilts and never makes you feel bad for being busy.</span><span data-l="zh">你很久没来，它只是想你；它不会枯萎，也不会让你因为忙而内疚。</span></p>
+        </div>
+        <div>
+          <h3><span data-l="en">It remembers the small things</span><span data-l="zh">记得小事</span></h3>
+          <p><span data-l="en">Your name, what you look forward to, how yesterday went. A few gentle follow-ups a day, never more.</span><span data-l="zh">你的名字、你在期待的事、昨天过得怎么样。每天最多轻轻问起两次。</span></p>
+        </div>
+        <div>
+          <h3><span data-l="en">It knows its limits</span><span data-l="zh">知道自己的边界</span></h3>
+          <p><span data-l="en">If something serious comes up, it stays with you and gently points you to people who can really help.</span><span data-l="zh">遇到很严重的事，它会待在你身边，并轻轻地请你去找真正能帮上忙的人。</span></p>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="made-h">
+      <div class="two">
+        <div>
+          <h2 id="made-h"><span data-l="en">How it’s made</span><span data-l="zh">它是怎么做的</span></h2>
+          <dl class="facts">
+            <div><dt><span data-l="en">A phone-first web app</span><span data-l="zh">手机优先的网页应用</span></dt><dd><span data-l="en">TypeScript and WebGL (three.js). The moon, the sky and the star writing are all drawn in real time.</span><span data-l="zh">TypeScript + WebGL（three.js）。月亮、天空和星星写字都是实时绘制的。</span></dd></div>
+            <div><dt><span data-l="en">A quick reflex, then a reply</span><span data-l="zh">先有反应，再回答</span></dt><dd><span data-l="en">A fast classifier (Jev by TypeSafe) reads each message in about 0.3 seconds so the moon reacts right away; the reply comes from a compact language model (Claude Haiku by Anthropic).</span><span data-l="zh">一个很快的分类模型（TypeSafe 的 Jev）约 0.3 秒读懂你的话，月亮先做出表情；回答来自一个小而快的语言模型（Anthropic 的 Claude Haiku）。</span></dd></div>
+            <div><dt><span data-l="en">Private by default</span><span data-l="zh">默认私密</span></dt><dd><span data-l="en">During the beta, your settings and the moon’s memory stay small and personal; you’ll be able to see and erase what it remembers.</span><span data-l="zh">内测期间，设置和月亮的记忆都只和你有关；你能看到、也能删掉它记得的事。</span></dd></div>
+            <div><dt><span data-l="en">One maker</span><span data-l="zh">一个人做的</span></dt><dd><span data-l="en">Moonbao is an independent personal project.</span><span data-l="zh">Moonbao 是一个独立的个人项目。</span></dd></div>
+          </dl>
+        </div>
+        <div>
+          <h2><span data-l="en">Where it is</span><span data-l="zh">现在到哪儿了</span></h2>
+          <ol class="timeline">
+            <li class="now"><time datetime="2026-09">Sep 2026</time><div><b><span data-l="en">Prototype</span><span data-l="zh">原型</span></b><p><span data-l="en">The moon and its expressions, the real sky, star writing, voice, and a first brain with memory.</span><span data-l="zh">月亮和它的表情、真实的星空、星星写字、语音，以及第一版会记事的大脑。</span></p></div></li>
+            <li><time datetime="2026-12">Oct – Dec 2026</time><div><b><span data-l="en">Making it yours</span><span data-l="zh">变成你的月亮</span></b><p><span data-l="en">Painting on the moon with a little paint, memory stars, and letters it writes you in starlight.</span><span data-l="zh">用一点点颜料在月亮上画画、记忆星、它用星光写给你的信。</span></p></div></li>
+            <li><time datetime="2027-01">Early 2027</time><div><b><span data-l="en">Small beta</span><span data-l="zh">小范围内测</span></b><p><span data-l="en">A small group of outside testers on their own phones.</span><span data-l="zh">一小群外部测试者，在他们自己的手机上。</span></p></div></li>
+          </ol>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span>© 2026 Moonbao</span>
+    <span><span data-l="en">Milky Way imagery: NASA/Goddard Space Flight Center Scientific Visualization Studio; Gaia DR2: ESA/Gaia/DPAC. Star catalogue: d3-celestial. Fonts: Dancing Script, LXGW WenKai, Young Serif, Figtree (SIL Open Font License).</span><span data-l="zh">银河图像：NASA/Goddard Space Flight Center Scientific Visualization Studio；Gaia DR2：ESA/Gaia/DPAC。星表：d3-celestial。字体：Dancing Script、霞鹜文楷、Young Serif、Figtree（SIL Open Font License）。</span></span>
+  </footer>
+</div>
+
+<script>
+(() => {
+  // ---- 语言：默认按浏览器语言，按钮切换，记住在本机 ----
+  const body = document.body;
+  const get = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+  const set = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+  let lang = get("moonbao.site.lang") || ((navigator.language || "en").toLowerCase().startsWith("zh") ? "zh" : "en");
+  const live = document.getElementById("live");
+  const screen = document.getElementById("screen");
+  function applyLang(l) {
+    lang = l;
+    body.dataset.lang = l;
+    document.documentElement.lang = l === "zh" ? "zh-CN" : "en";
+    document.getElementById("lang-en").setAttribute("aria-pressed", String(l === "en"));
+    document.getElementById("lang-zh").setAttribute("aria-pressed", String(l === "zh"));
+    set("moonbao.site.lang", l);
+    renderPhase();
+    loadLive();
+  }
+  document.getElementById("lang-en").onclick = () => applyLang("en");
+  document.getElementById("lang-zh").onclick = () => applyLang("zh");
+
+  // ---- 实机：真的 app 跑演示剧本；8 秒内没起来（或这个网页环境不让嵌），就留着视频 ----
+  let liveTimer = 0;
+  function loadLive() {
+    screen.classList.remove("live");
+    clearTimeout(liveTimer);
+    live.src = "app/index.html?scene=demo&brain=off&panel=off&lang=" + lang;
+    liveTimer = setTimeout(checkLive, 8000);
+  }
+  function checkLive() {
+    try {
+      const w = live.contentWindow;
+      if (w && w.__app && w.document.querySelector("canvas")) screen.classList.add("live");
+    } catch {
+      /* 嵌不进来：保留视频 */
+    }
+  }
+  live.addEventListener("load", () => setTimeout(checkLive, 2500));
+  document.getElementById("toDemo").addEventListener("click", () => setTimeout(() => { try { live.focus(); } catch {} }, 600));
+
+  // ---- 片子：滚到眼前才播、离开就停（省电）；自动播放被拦（比如 iPhone 省电模式）就给个播放按钮 ----
+  const clips = [...document.querySelectorAll(".clip video")];
+  const tryPlay = (v) => v.play().catch(() => {
+    if (v.parentElement.querySelector(".play")) return;
+    const b = document.createElement("button");
+    b.className = "play";
+    b.type = "button";
+    b.setAttribute("aria-label", lang === "zh" ? "播放" : "Play");
+    b.textContent = "▶";
+    b.onclick = () => { v.play().then(() => b.remove()).catch(() => {}); };
+    v.parentElement.appendChild(b);
+  });
+  if ("IntersectionObserver" in window) {
+    const io = new IntersectionObserver((es) => es.forEach((e) => (e.isIntersecting ? tryPlay(e.target) : e.target.pause())), { threshold: 0.3 });
+    clips.forEach((v) => { v.removeAttribute("autoplay"); io.observe(v); });
+  } else clips.forEach(tryPlay);
+
+  // ---- 今晚的月相（真实）：从 2000-01-06 18:14 UTC 的新月算起，一个朔望月 29.53 天 ----
+  function moonPhase(d) {
+    const syn = 29.530588853;
+    const ref = Date.UTC(2000, 0, 6, 18, 14);
+    const age = ((((d - ref) / 86400000) % syn) + syn) % syn;
+    const f = age / syn;
+    const illum = (1 - Math.cos(2 * Math.PI * f)) / 2;
+    return { f, illum };
+  }
+  const NAMES = {
+    en: ["new moon", "waxing crescent", "first quarter", "waxing gibbous", "full moon", "waning gibbous", "last quarter", "waning crescent"],
+    zh: ["新月", "蛾眉月", "上弦月", "盈凸月", "满月", "亏凸月", "下弦月", "残月"],
+  };
+  function renderPhase() {
+    const { f, illum } = moonPhase(Date.now());
+    const idx = Math.round(f * 8) % 8;
+    const pct = Math.round(illum * 100);
+    document.getElementById("phaseText").textContent = (lang === "zh" ? "今晚 · " : "Tonight · ") + NAMES[lang][idx] + " · " + pct + "%";
+    // 小图标：逐像素画（北半球：上弦右边亮，下弦左边亮），暗的部分只留很淡的底
+    const c = document.getElementById("phaseIcon");
+    const g = c.getContext("2d");
+    const N = 44, R = 19;
+    const img = g.createImageData(N, N);
+    const k = Math.cos(2 * Math.PI * f);
+    for (let py = 0; py < N; py++) {
+      for (let px = 0; px < N; px++) {
+        const x = (px + 0.5 - N / 2) / R, y = (py + 0.5 - N / 2) / R;
+        const rr = x * x + y * y;
+        if (rr > 1) continue;
+        const edge = Math.min(1, (1 - Math.sqrt(rr)) * R);
+        const half = Math.sqrt(1 - y * y);
+        const lit = f < 0.5 ? x > k * half : x < -k * half;
+        const o = (py * N + px) * 4;
+        if (lit) { img.data[o] = 255; img.data[o + 1] = 215; img.data[o + 2] = 165; img.data[o + 3] = Math.round(255 * edge); }
+        else { img.data[o] = 235; img.data[o + 1] = 238; img.data[o + 2] = 250; img.data[o + 3] = Math.round(36 * edge); }
+      }
+    }
+    g.putImageData(img, 0, 0);
+  }
+
+  // ---- 背景：很淡的星星（画布，尊重减少动效） ----
+  const sc = document.getElementById("stars");
+  const sg = sc.getContext("2d");
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let stars = [];
+  function resize() {
+    const dpr = Math.min(2, devicePixelRatio || 1);
+    sc.width = innerWidth * dpr; sc.height = innerHeight * dpr;
+    sg.setTransform(dpr, 0, 0, dpr, 0, 0);
+    stars = Array.from({ length: Math.round((innerWidth * innerHeight) / 5200) }, () => ({ x: Math.random() * innerWidth, y: Math.random() * innerHeight, r: Math.random() * 1.1 + 0.2, p: Math.random() * 6.28, s: 0.4 + Math.random() }));
+  }
+  function draw(t) {
+    sg.clearRect(0, 0, innerWidth, innerHeight);
+    for (const s of stars) {
+      const a = 0.35 + 0.35 * Math.sin(s.p + (reduce ? 0 : t * 0.001 * s.s));
+      sg.fillStyle = "rgba(235,238,250," + a.toFixed(3) + ")";
+      sg.beginPath(); sg.arc(s.x, s.y, s.r, 0, 6.2832); sg.fill();
+    }
+    if (!reduce) requestAnimationFrame(draw);
+  }
+  addEventListener("resize", resize);
+  resize();
+  requestAnimationFrame(draw);
+
+  applyLang(lang);
+})();
+</script>
