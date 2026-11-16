@@ -1,8 +1,12 @@
 # moonbao
 
+> **2026-11-16：单人陪伴版已冻结，转向 v2「两个人的月亮」（设计阶段）。** 下面的介绍和运行说明描述的是单人版代码，仍然能跑。
+
 一个住在你手机夜空里的小月亮。它有两颗会眨的黑豆眼，不说话——用光、动作和星星拼出的字回应你；它记得你说过的话，第二天会想起来问你；你可以在它身上画花纹，它会一直留着。
 
-- **[PLAN.md](PLAN.md)** — 执行计划（阶段 / checkpoint / 未决问题 / 会话记录）
+- **[PLAN.md](PLAN.md)** — 现行计划（v2；阶段 / checkpoint / 未决问题 / 会话记录）
+- **[docs/design-v2.md](docs/design-v2.md)** — v2 设计草案：两个人的月亮
+- **[docs/archive/](docs/archive/)** — 单人版旧计划、情侣小店原计划
 - **[docs/design.md](docs/design.md)** — 设定与想法的完整记录（角色、月相、空间感、回应通道、声音、成长）
 - **[docs/next-session-prompt.md](docs/next-session-prompt.md)** — 开新 session 时用的交接 prompt（含待讨论的开放点）
 - **persona/** — 角色圣经草案（`system-prompt.md`）+ 身体协议（`protocol.md`）+ 人格回归测例（`tests/cases.json`）
