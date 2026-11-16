@@ -1,8 +1,12 @@
 # moonbao · agent 入口
 
+> **2026-11-16：单人陪伴版已冻结，仓库转向 v2「两个人的月亮」，目前只在设计阶段，不写新功能代码。**
+> 现行计划 `PLAN.md`，新设计 `docs/design-v2.md`；旧计划在 `docs/archive/PLAN-solo-2026-11-16.md`，旧代码状态在 tag `archive/moonbao-solo-2026-11-16`。
+> 下面的「三个侧重点」和「硬规则」写于单人版：关于月亮角色、渲染、Git、花钱与发布的规则继续有效；关于路线（长跑 1 / 长跑 2、CHECKPOINT V）的内容已过时。
+
 一个住在你手机夜空里的小月亮。它不说话，用眼神、光和星星回应你；它记得你说过的话，第二天会想起来问你。
 
-**开工前按顺序读**：本文件 → `PLAN.md`（先看会话记录末尾，再找第一个未完成阶段）→ `docs/design.md`（设定与想法的完整记录）。
+**开工前按顺序读**：本文件 → `PLAN.md`（先看会话记录末尾，再找第一个未完成阶段）→ `docs/design-v2.md`（v2 设计）→ `docs/design.md`（月亮角色设定的完整记录）。
 协议：`~/Development/loop-engineering.md`（PLAN.md 单一事实来源、Definition of Done、⏸CHECKPOINT ≤5 问、参数外置、反馈原文入日志、已拍板不翻案）。
 
 ## 三个侧重点（做取舍时按这个顺序）

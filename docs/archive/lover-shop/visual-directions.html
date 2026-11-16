@@ -1,0 +1,265 @@
+<title>星空小店视觉方向</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600&family=Noto+Sans+SC:wght@400;500;700&family=Cormorant+Garamond:ital,wght@0,500;1,500&family=Ma+Shan+Zheng&family=Caveat:wght@500&family=Press+Start+2P&family=ZCOOL+QingKe+HuangYou&display=swap">
+<style>
+/* Layout: one column of four "direction" chapters, each = phone mockup left, spec right; a comparison table and a recommendation at the end. */
+:root{
+  --bg:#f6f4ef; --fg:#1e1c24; --muted:#6b6878; --line:#dcd8d0; --card:#ffffff; --accent:#3b3f8c;
+  --display:"Noto Serif SC","Songti SC",serif; --body:"Noto Sans SC","PingFang SC",system-ui,sans-serif; --mono:ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --bg:#15141a; --fg:#ece9f2; --muted:#a19dad; --line:#302d3a; --card:#1e1c25; --accent:#a8abf0; color-scheme:dark } }
+:root[data-theme="dark"]{ --bg:#15141a; --fg:#ece9f2; --muted:#a19dad; --line:#302d3a; --card:#1e1c25; --accent:#a8abf0; color-scheme:dark }
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.7;padding-inline:20px;padding-block:32px 64px}
+.wrap{max-width:1040px;margin:0 auto}
+h1{font-family:var(--display);font-weight:600;font-size:clamp(28px,4vw,40px);line-height:1.2;margin:0 0 8px;text-wrap:balance}
+.lead{max-width:62ch;color:var(--muted);margin:0 0 40px}
+h2{font-family:var(--display);font-weight:600;font-size:24px;margin:0 0 4px;text-wrap:balance}
+h3{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:18px 0 6px;font-weight:500}
+p{margin:0 0 10px}
+.dir{display:grid;grid-template-columns:260px 1fr;gap:36px;padding:40px 0;border-top:1px solid var(--line);align-items:start}
+.dir>*{min-width:0}
+.eyebrow{font-family:var(--mono);font-size:12px;color:var(--muted);letter-spacing:.08em}
+.spec{display:grid;grid-template-columns:1fr 1fr;gap:4px 28px}
+.spec>div{min-width:0}
+.sw{display:flex;gap:6px;margin:4px 0 8px}
+.sw span{width:34px;height:34px;border-radius:6px;border:1px solid rgba(0,0,0,.12);display:block}
+.pros,.cons{margin:0;padding-left:18px}
+.pros li::marker{color:#3a8a5c}.cons li::marker{color:#b5563a}
+.tag{display:inline-block;font-size:12px;padding:2px 8px;border:1px solid var(--line);border-radius:999px;color:var(--muted);margin-right:4px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-weight:500;color:var(--muted);font-size:12px;letter-spacing:.08em;text-transform:uppercase}
+.tablewrap{overflow-x:auto}
+.reco{background:var(--card);border:1px solid var(--line);padding:24px 28px;border-radius:10px;margin-top:40px}
+.reco h2{margin-bottom:10px}
+
+/* ---- phone frame ---- */
+.phone{width:260px;height:520px;border-radius:38px;padding:10px;background:#111;box-shadow:0 18px 40px rgba(0,0,0,.25);position:relative;flex:none;max-width:100%}
+.screen{width:100%;height:100%;border-radius:30px;overflow:hidden;position:relative;font-family:var(--body)}
+.notch{position:absolute;top:14px;left:50%;transform:translateX(-50%);width:80px;height:22px;border-radius:12px;background:#111;z-index:5}
+.top{position:absolute;top:44px;left:18px;right:18px;display:flex;justify-content:space-between;align-items:baseline;z-index:3;font-size:11px}
+.stars{position:absolute;inset:0}
+.stars i{position:absolute;border-radius:50%;background:#fff;opacity:.9}
+.cst{position:absolute;inset:0;width:100%;height:100%}
+.label{position:absolute;font-size:9px;letter-spacing:.06em;z-index:3}
+.sheet{position:absolute;left:0;right:0;bottom:0;padding:14px 16px 20px;z-index:4}
+.coupon{border-radius:10px;padding:10px 12px;font-size:11px;line-height:1.4;position:relative}
+.coupon b{display:block;font-size:13px;margin-bottom:2px}
+.coupon small{opacity:.75}
+.price{position:absolute;right:12px;top:10px;font-size:12px;font-weight:700}
+.nav{display:flex;justify-content:space-around;margin-top:12px;font-size:9px;letter-spacing:.1em;opacity:.7}
+@media (prefers-reduced-motion:no-preference){
+  .tw i{animation:tw 3.6s ease-in-out infinite}
+  .tw i:nth-child(3n){animation-delay:1.2s}.tw i:nth-child(4n){animation-delay:2.1s}
+  @keyframes tw{0%,100%{opacity:.35}50%{opacity:1}}
+}
+
+/* A 深夜天文台 */
+.a .screen{background:radial-gradient(120% 80% at 50% 110%,#1b2244 0%,#0b0e21 60%,#05060f 100%)}
+.a .top{color:#c9b98a;font-family:"Cormorant Garamond",serif;font-size:13px;letter-spacing:.14em}
+.a .label{color:#c9b98a;font-family:"Cormorant Garamond",serif;font-style:italic;font-size:11px}
+.a .sheet{background:linear-gradient(to top,rgba(11,14,33,.98),rgba(11,14,33,.6) 80%,transparent)}
+.a .coupon{background:#f1e9d6;color:#1b1a2a;border-radius:4px;border:1px solid #c9b98a}
+.a .coupon::before,.a .coupon::after{content:"";position:absolute;top:50%;width:12px;height:12px;border-radius:50%;background:#0b0e21;transform:translateY(-50%)}
+.a .coupon::before{left:-7px}.a .coupon::after{right:-7px}
+.a .coupon b{font-family:var(--display);font-weight:600}
+.a .nav{color:#c9b98a}
+
+/* B 纸上星空 */
+.b .screen{background:#22264f;background-image:radial-gradient(rgba(255,255,255,.06) 1px,transparent 1px);background-size:6px 6px}
+.b .top{color:#f3e9c9;font-family:"Ma Shan Zheng","Caveat",cursive;font-size:15px}
+.b .label{color:#f3e9c9;font-family:"Ma Shan Zheng","Caveat",cursive;font-size:12px}
+.b .stars i{background:#f3e9c9;border-radius:2px;transform:rotate(45deg)}
+.b .sheet{background:#f6efe0;border-top-left-radius:18px;border-top-right-radius:18px;color:#3a3220}
+.b .coupon{background:#fff;border:1.5px dashed #b89a5a;color:#3a3220;font-family:"Ma Shan Zheng","Caveat",cursive;font-size:13px}
+.b .coupon b{font-size:16px;font-weight:400}
+.b .coupon .stamp{position:absolute;right:10px;bottom:6px;width:34px;height:34px;border:2px solid #c0483e;border-radius:50%;color:#c0483e;font-size:9px;display:grid;place-items:center;transform:rotate(-14deg);opacity:.85}
+.b .nav{color:#3a3220}
+
+/* C 像素小宇宙 */
+.c .screen{background:#0f0b2a;image-rendering:pixelated}
+.c .top{color:#ffd166;font-family:"Press Start 2P","ZCOOL QingKe HuangYou",monospace;font-size:8px}
+.c .label{color:#8be9fd;font-family:"ZCOOL QingKe HuangYou",monospace;font-size:11px}
+.c .stars i{border-radius:0;background:#ffd166;box-shadow:2px 0 #ffd166,-2px 0 #ffd166,0 2px #ffd166,0 -2px #ffd166}
+.c .sheet{background:#1e1846;border-top:3px solid #ffd166}
+.c .coupon{background:#2b2361;color:#fff;border:3px solid #8be9fd;border-radius:0;font-family:"ZCOOL QingKe HuangYou",monospace;box-shadow:4px 4px 0 #000}
+.c .coupon b{font-size:14px;font-weight:400}
+.c .price{color:#ffd166;font-family:"Press Start 2P",monospace;font-size:9px}
+.c .nav{color:#8be9fd;font-family:"ZCOOL QingKe HuangYou",monospace}
+
+/* D 柔光星云 */
+.d .screen{background:linear-gradient(170deg,#2a2f6e 0%,#5a4a8f 40%,#b9738a 75%,#f0a882 100%)}
+.d .top{color:#fff;font-weight:500;font-size:12px}
+.d .label{color:rgba(255,255,255,.9);font-size:10px}
+.d .stars i{box-shadow:0 0 6px 2px rgba(255,255,255,.5)}
+.d .sheet{background:rgba(255,255,255,.18);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top-left-radius:24px;border-top-right-radius:24px;color:#fff}
+.d .coupon{background:rgba(255,255,255,.55);color:#2a2340;border-radius:16px;backdrop-filter:blur(8px)}
+.d .coupon b{font-weight:700}
+.d .nav{color:#fff}
+
+@media (max-width:720px){
+  .dir{grid-template-columns:1fr;gap:24px}
+  .phone{margin:0 auto}
+  .spec{grid-template-columns:1fr}
+}
+</style>
+
+<div class="wrap">
+<h1>星空小店，四种视觉方向</h1>
+<p class="lead">同一个大厅、同一张「陪逛宜家券」，用四种截然不同的气质各画一遍。每种都标了它最适合承载的东西和最大的风险，末尾有我的推荐组合。手机图是示意，不是最终 UI。</p>
+
+<!-- A -->
+<section class="dir a">
+  <div class="phone"><div class="screen tw">
+    <div class="notch"></div>
+    <div class="top"><span>Sept · Virgo</span><span>✦ 47</span></div>
+    <div class="stars">
+      <i style="left:40px;top:120px;width:3px;height:3px"></i><i style="left:120px;top:90px;width:2px;height:2px"></i><i style="left:180px;top:140px;width:3px;height:3px"></i>
+      <i style="left:70px;top:200px;width:4px;height:4px;background:#f1e9d6"></i><i style="left:150px;top:230px;width:4px;height:4px;background:#f1e9d6"></i><i style="left:200px;top:190px;width:2px;height:2px"></i>
+      <i style="left:30px;top:260px;width:2px;height:2px"></i><i style="left:110px;top:170px;width:2px;height:2px"></i><i style="left:220px;top:80px;width:2px;height:2px"></i><i style="left:90px;top:60px;width:1px;height:1px"></i>
+    </div>
+    <svg class="cst" viewBox="0 0 240 500"><polyline points="72,202 152,232 202,192" fill="none" stroke="#c9b98a" stroke-width=".6" opacity=".7"/><circle cx="120" cy="330" r="16" fill="none" stroke="#c9b98a" stroke-width=".6" stroke-dasharray="2 3"/></svg>
+    <div class="label" style="left:64px;top:214px">陪逛宜家券</div>
+    <div class="label" style="left:90px;top:352px">2029 · 三年后</div>
+    <div class="sheet">
+      <div class="coupon"><b>陪逛宜家券</b><small>TA 上架 · 30 天内有效 · 限 1 张</small><span class="price">3 ✦</span></div>
+      <div class="nav"><span>SKY</span><span>SHOP</span><span>US</span></div>
+    </div>
+  </div></div>
+  <div>
+    <div class="eyebrow">A</div>
+    <h2>深夜天文台</h2>
+    <p>安静、克制、有点贵。星空是墨蓝到近黑的深空，星座用极细的金色线条勾出来，券是一张牛皮纸质感的旧车票。整个 app 像一本精装的星图册。</p>
+    <div class="spec">
+      <div><h3>色彩</h3><div class="sw"><span style="background:#05060f"></span><span style="background:#0b0e21"></span><span style="background:#1b2244"></span><span style="background:#c9b98a"></span><span style="background:#f1e9d6"></span></div><p>深空墨蓝为底，旧金为唯一强调色，纸色只出现在券上。</p></div>
+      <div><h3>字体</h3><p>标题宋体（Noto Serif SC），拉丁字用 Cormorant 斜体做标签；正文黑体。数字用等宽。</p></div>
+      <div><h3>动效</h3><p>星星慢速呼吸；滑动时前后景轻微视差；兑现是一条细长的流星，落地变成票根。克制，不弹跳。</p></div>
+      <div><h3>最适合承载</h3><p><span class="tag">时间胶囊</span><span class="tag">实物 NFC 卡</span><span class="tag">30 欧定价</span> 卡面就是这张星图，天然成套。</p></div>
+    </div>
+    <h3>优点 / 风险</h3>
+    <ul class="pros"><li>高级感直接支撑一次性卖贵</li><li>美术量小：线条和点，程序化生成星座就够</li><li>深色底让「远星 / 近星」的层次最清楚</li></ul>
+    <ul class="cons"><li>偏冷，「奶茶好喝吗」这种日常互动放进去会显得过于正式</li><li>用户多在白天打开，全黑界面在阳光下不好看</li></ul>
+  </div>
+</section>
+
+<!-- B -->
+<section class="dir b">
+  <div class="phone"><div class="screen">
+    <div class="notch"></div>
+    <div class="top"><span>九月 · 处女座</span><span>星尘 47</span></div>
+    <div class="stars">
+      <i style="left:44px;top:110px;width:6px;height:6px"></i><i style="left:130px;top:96px;width:5px;height:5px"></i><i style="left:190px;top:150px;width:6px;height:6px"></i>
+      <i style="left:76px;top:190px;width:9px;height:9px"></i><i style="left:150px;top:220px;width:9px;height:9px"></i><i style="left:210px;top:200px;width:5px;height:5px"></i>
+      <i style="left:100px;top:150px;width:4px;height:4px"></i><i style="left:30px;top:250px;width:5px;height:5px"></i>
+    </div>
+    <svg class="cst" viewBox="0 0 240 500"><path d="M80 194 Q120 260 154 224" fill="none" stroke="#f3e9c9" stroke-width="1.4" stroke-dasharray="3 4" stroke-linecap="round"/></svg>
+    <div class="label" style="left:60px;top:236px">陪逛宜家券</div>
+    <div class="sheet">
+      <div class="coupon"><b>陪逛宜家券</b>TA 写的：这次不许在样板间躺下<br><small>30 天内有效 · 只有 1 张</small><span class="price" style="color:#c0483e">3 枚</span><div class="stamp">已买</div></div>
+      <div class="nav"><span>星空</span><span>小店</span><span>我们</span></div>
+    </div>
+  </div></div>
+  <div>
+    <div class="eyebrow">B</div>
+    <h2>纸上星空</h2>
+    <p>像两个人一起做的手账。夜空是靛蓝色的纸，星星是墨点和四角星贴纸，星座用虚线手绘。券是白卡纸加虚线边和一枚红色印章，字是手写体。所有东西都像是能拿在手里的。</p>
+    <div class="spec">
+      <div><h3>色彩</h3><div class="sw"><span style="background:#22264f"></span><span style="background:#f6efe0"></span><span style="background:#f3e9c9"></span><span style="background:#b89a5a"></span><span style="background:#c0483e"></span></div><p>靛蓝纸 + 米白卡纸，印章红是唯一的强调色。日间模式可以整页切成米白纸。</p></div>
+      <div><h3>字体</h3><p>手写体（马善政 / Caveat）只用于券和标签，正文仍是黑体，避免通篇手写难读。</p></div>
+      <div><h3>动效</h3><p>贴纸式：新星「啪」地贴上去带一点弹性；兑现是印章盖下去的动作；胶囊封存像把信塞进信封。</p></div>
+      <div><h3>最适合承载</h3><p><span class="tag">情侣小店</span><span class="tag">问句动态</span><span class="tag">和好券</span> 日常互动的温度最对。</p></div>
+    </div>
+    <h3>优点 / 风险</h3>
+    <ul class="pros"><li>温暖、亲密，最符合「不像账本」的原则</li><li>券本身就是好看的东西，用户愿意截图分享</li><li>日间可以是纸色界面，解决白天打开的问题</li></ul>
+    <ul class="cons"><li>容易滑向「可爱」的套路，需要克制贴纸数量</li><li>手写体的多语言支持要单独处理（中英各选一款）</li><li>纸质感做粗糙会显廉价，纹理和阴影要调很久</li></ul>
+  </div>
+</section>
+
+<!-- C -->
+<section class="dir c">
+  <div class="phone"><div class="screen">
+    <div class="notch"></div>
+    <div class="top"><span>SEP·VIRGO</span><span>✦47</span></div>
+    <div class="stars">
+      <i style="left:44px;top:110px;width:2px;height:2px"></i><i style="left:130px;top:96px;width:2px;height:2px"></i><i style="left:190px;top:150px;width:2px;height:2px"></i>
+      <i style="left:76px;top:200px;width:4px;height:4px;background:#8be9fd;box-shadow:4px 0 #8be9fd,-4px 0 #8be9fd,0 4px #8be9fd,0 -4px #8be9fd"></i>
+      <i style="left:150px;top:230px;width:4px;height:4px;background:#8be9fd;box-shadow:4px 0 #8be9fd,-4px 0 #8be9fd,0 4px #8be9fd,0 -4px #8be9fd"></i>
+      <i style="left:210px;top:200px;width:2px;height:2px"></i><i style="left:30px;top:250px;width:2px;height:2px"></i><i style="left:100px;top:60px;width:2px;height:2px"></i>
+    </div>
+    <svg class="cst" viewBox="0 0 240 500" shape-rendering="crispEdges"><path d="M80 202 H120 V232 H152" fill="none" stroke="#8be9fd" stroke-width="2"/></svg>
+    <div class="label" style="left:58px;top:246px">陪逛宜家券 x1</div>
+    <div class="sheet">
+      <div class="coupon"><b>陪逛宜家券</b>TA 上架 · 30 天 · 限 1<span class="price">3</span></div>
+      <div class="nav"><span>星空</span><span>小店</span><span>我们</span></div>
+    </div>
+  </div></div>
+  <div>
+    <div class="eyebrow">C</div>
+    <h2>像素小宇宙</h2>
+    <p>把「这是我们俩的小游戏」直接画成游戏。8-bit 的星星、道具栏一样的商店、像素金币，券是背包里的物品，兑现有音效。以后的电子宠物在这个世界里是最自然的。</p>
+    <div class="spec">
+      <div><h3>色彩</h3><div class="sw"><span style="background:#0f0b2a"></span><span style="background:#1e1846"></span><span style="background:#2b2361"></span><span style="background:#ffd166"></span><span style="background:#8be9fd"></span></div><p>深紫底，金黄 + 冰蓝两个高饱和强调色，像素游戏的经典配法。</p></div>
+      <div><h3>字体</h3><p>拉丁用 Press Start 2P，中文用站酷庆科黄油体或自绘像素字；正文可退回黑体保证可读。</p></div>
+      <div><h3>动效</h3><p>帧动画：星星四格闪烁、券掉进背包、金币跳一下。逐帧做，不用缓动曲线。</p></div>
+      <div><h3>最适合承载</h3><p><span class="tag">电子宠物</span><span class="tag">币和勋章</span><span class="tag">限量 / 盲盒</span> 游戏化元素在这里不需要解释。</p></div>
+    </div>
+    <h3>优点 / 风险</h3>
+    <ul class="pros"><li>辨识度最高，最容易在社交平台传播</li><li>像素资产小而可复用，长期美术投入最可控</li><li>「收藏币 / 勋章 / 盲盒」的心理在游戏语境里完全成立</li></ul>
+    <ul class="cons"><li>和「时间胶囊 + 实物卡 + 30 欧」的郑重感不搭，两条线要分开处理</li><li>受众偏窄：不玩游戏的一方可能觉得幼稚</li><li>像素风做得半吊子比任何风格都难看，要真的懂像素美术</li></ul>
+  </div>
+</section>
+
+<!-- D -->
+<section class="dir d">
+  <div class="phone"><div class="screen tw">
+    <div class="notch"></div>
+    <div class="top"><span>9 月 · 处女座</span><span>✦ 47</span></div>
+    <div class="stars">
+      <i style="left:44px;top:110px;width:3px;height:3px"></i><i style="left:130px;top:96px;width:2px;height:2px"></i><i style="left:190px;top:150px;width:3px;height:3px"></i>
+      <i style="left:76px;top:190px;width:6px;height:6px"></i><i style="left:150px;top:220px;width:6px;height:6px"></i><i style="left:210px;top:200px;width:2px;height:2px"></i>
+      <i style="left:30px;top:250px;width:2px;height:2px"></i><i style="left:100px;top:60px;width:2px;height:2px"></i>
+    </div>
+    <svg class="cst" viewBox="0 0 240 500"><line x1="79" y1="193" x2="153" y2="223" stroke="#fff" stroke-width="1" opacity=".8"/></svg>
+    <div class="label" style="left:64px;top:236px">陪逛宜家券</div>
+    <div class="sheet">
+      <div class="coupon"><b>陪逛宜家券</b>TA 上架 · 30 天内有效 · 限 1 张<span class="price">3 ✦</span></div>
+      <div class="nav"><span>星空</span><span>小店</span><span>我们</span></div>
+    </div>
+  </div></div>
+  <div>
+    <div class="eyebrow">D</div>
+    <h2>柔光星云</h2>
+    <p>黄昏色的星云渐变、磨砂玻璃的卡片、大圆角。看起来像一个精心做的原生 iOS app，任何人第一眼都觉得舒服、现代、安全。</p>
+    <div class="spec">
+      <div><h3>色彩</h3><div class="sw"><span style="background:#2a2f6e"></span><span style="background:#5a4a8f"></span><span style="background:#b9738a"></span><span style="background:#f0a882"></span><span style="background:#ffffff"></span></div><p>靛蓝到珊瑚的黄昏渐变，白色玻璃层，没有单独的强调色，靠渐变本身出彩。</p></div>
+      <div><h3>字体</h3><p>系统字（苹方 / SF），加粗做层级。不引入个性字体。</p></div>
+      <div><h3>动效</h3><p>iOS 原生那套：弹簧过渡、卡片上滑、模糊变化。用户零学习成本。</p></div>
+      <div><h3>最适合承载</h3><p><span class="tag">快速上线</span><span class="tag">大众接受度</span> Flutter / SwiftUI 实现成本最低。</p></div>
+    </div>
+    <h3>优点 / 风险</h3>
+    <ul class="pros"><li>开发最快，几乎不需要美术</li><li>不冒犯任何人，配对时被拉的一方不会被风格劝退</li></ul>
+    <ul class="cons"><li>这正是现在 AI 生成设计和大批新 app 的默认长相，毫无记忆点</li><li>渐变星云和「星座币 / 摘星」的线条语言不太兼容，星星会被糊掉</li><li>付费和实物卡在这个视觉下缺少值 30 欧的理由</li></ul>
+  </div>
+</section>
+
+<h2 style="margin-top:44px">横向比较</h2>
+<div class="tablewrap">
+<table>
+<tr><th>维度</th><th>A 深夜天文台</th><th>B 纸上星空</th><th>C 像素小宇宙</th><th>D 柔光星云</th></tr>
+<tr><td>气质</td><td>郑重、克制</td><td>亲密、手作</td><td>玩闹、复古</td><td>现代、中性</td></tr>
+<tr><td>支撑 30 欧实物卡</td><td>强</td><td>中，需要实物做工好</td><td>弱</td><td>弱</td></tr>
+<tr><td>日常互动的温度</td><td>偏冷</td><td>最好</td><td>好</td><td>一般</td></tr>
+<tr><td>美术投入</td><td>小（线条 + 程序生成）</td><td>中（纹理、贴纸要磨）</td><td>中（需懂像素）</td><td>最小</td></tr>
+<tr><td>白天使用</td><td>差，需要日间模式</td><td>好，纸色日间自然</td><td>差</td><td>中</td></tr>
+<tr><td>辨识度 / 传播</td><td>中</td><td>高（券可分享）</td><td>最高</td><td>低</td></tr>
+<tr><td>与后续宠物的兼容</td><td>需单独设计</td><td>贴纸风宠物自然</td><td>最自然</td><td>一般</td></tr>
+</table>
+</div>
+
+<div class="reco">
+  <h2>我的推荐：A 的天空，B 的手</h2>
+  <p>夜空用 A 的语言：深空底、极细金线、程序化星座，这是「远星 = 胶囊」这条长期线的郑重感来源，也是实物 NFC 卡面的直接素材。落到手里的东西全部用 B 的语言：券是虚线边的卡纸票、兑现是盖章、和好券是手写的一句话、胶囊封存是塞进信封。两种语言在「天上 / 手里」这条边界上分开，不会打架。</p>
+  <p>日间模式按 B 处理：大厅在白天是米白纸色的「白昼星空」，星星变成淡墨点，晚上才变深空。这同时解决了 A 的白天问题和「两地天空」的可能性。</p>
+  <p>C 不建议做主视觉，但它的两样东西值得偷：币和勋章的「收藏品」质感可以用小尺寸的像素或版画风来做，让它们在整个界面里有一点点不同的材质；将来的宠物也可以是这种风格的小东西。D 建议只作为兜底：如果阶段 0 的概念图做不出 A + B 的质感，先用 D 上线验证机制，再换皮。</p>
+  <p>下一步如果你想看得更具体，可以画三张关键画面的高保真图：夜间大厅、一张券的正反面、实物卡的卡面。这三张也正是阶段 0 要拿去问朋友的东西。</p>
+</div>
+</div>
